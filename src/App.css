@@ -174,3 +174,30 @@ dd small { font-size: 10px; display: inline-block; color: var(--accent-text); ma
   .summary-notes { flex-basis: 100%; order: 1; }
   .settings-card, .placeholder-page { padding: 20px 16px; }
 }
+
+.practice-modes, .challenge-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 22px 0; }
+.plain-button { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); padding: 10px 16px; min-height: 44px; font: inherit; cursor: pointer; }
+.practice-modes button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-bottom: 3px solid var(--on-accent); font-weight: 700; }
+.challenge-card { margin-top: 28px; padding: 28px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+.challenge-card p { line-height: 1.8; font-size: 14px; }
+.challenge-notice { padding: 12px 16px; border-left: 3px solid var(--secondary); background: var(--surface-soft); }
+.answer-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; border: 0; padding: 0; margin: 24px 0; min-width: 0; }
+.answer-options legend { margin-bottom: 12px; }
+.answer-options label { display: flex; align-items: center; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 15px; }
+.answer-options .answer-selected { border: 2px solid var(--accent-text); background: var(--surface-soft); font-weight: 700; }
+.answer-options input { accent-color: var(--accent); flex-shrink: 0; }
+.challenge-feedback { border-left: 4px solid var(--error); padding: 12px 16px; margin: 24px 0; background: var(--surface-soft); }
+.challenge-feedback.correct { border-color: var(--success); }
+.challenge-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.challenge-summary dd { margin: 8px 0; font-size: 21px; }
+.challenge-results { padding-left: 24px; }
+.challenge-results li { margin: 16px 0; }
+.challenge-board { min-width: 936px; }
+.challenge-board .fret-heading, .challenge-board .string-row { grid-template-columns: 76px 68px repeat(12, minmax(66px, 1fr)); }
+.challenge-card button:disabled { cursor: default; color: var(--disabled-text); background: var(--disabled-bg); }
+.challenge-card button:focus-visible, .plain-button:focus-visible, .setting-row select:focus-visible, .answer-options label:focus-within { outline: 3px solid var(--secondary); outline-offset: 3px; }
+@media (max-width: 700px) {
+  .challenge-card { padding: 20px 16px; }
+  .answer-options { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .challenge-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

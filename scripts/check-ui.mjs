@@ -25,6 +25,7 @@ const useState = (initial) => {
 }
 globalThis.__guitarTestHooks = {
   useState,
+  useSyncExternalStore(subscribe, getSnapshot) { void subscribe; return getSnapshot() },
   useRef(initial) { return useState(() => ({ current: initial }))[0] },
   useEffect(callback, dependencies) {
     const slots = currentSlots
@@ -36,7 +37,7 @@ globalThis.__guitarTestHooks = {
     }
   },
 }
-const hookUrl = dataUrl('export const { useState, useRef, useEffect } = globalThis.__guitarTestHooks')
+const hookUrl = dataUrl('export const { useState, useRef, useEffect, useSyncExternalStore } = globalThis.__guitarTestHooks')
 const moduleUrl = createModuleLoader({ react: hookUrl })
 const { default: App } = await import(moduleUrl('src/App.tsx'))
 let tree
