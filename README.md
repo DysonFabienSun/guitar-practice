@@ -1,6 +1,16 @@
-# React + TypeScript + Vite
+# Saguadlib
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+交互式吉他练习工具，基于 React + TypeScript + Vite。支持 24 品指板、预设与自定义调弦、合成拨弦音效，以及点击详情揭晓答案。
+
+主题可选择“跟随系统／浅色／深色”，选择保存在本地。深色主题优先使用 Times New Roman，中文使用衬线字体回退。
+
+本地运行：`npm run dev`。生产预览：`npm run build` 后运行 `npm run preview`，访问终端显示的网址下的 `/guitar-practice/`。
+
+检查：`npm run lint`、`npm run build`、`node scripts/check-ui.mjs`、`node scripts/check-audio.mjs`、`node scripts/check-theme.mjs`。
+
+GitHub 仓库名仍为 `guitar-practice`，部署路径仍为 `/guitar-practice/`。
+
+以下保留 Vite 模板开发说明。
 
 Currently, two official plugins are available:
 

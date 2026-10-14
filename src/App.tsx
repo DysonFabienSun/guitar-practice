@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { PluckPlayer } from './audio'
 import { getPitch, MAX_FRET, NOTE_OPTIONS, STANDARD_TUNING, TUNING_PRESETS, validateTuning } from './pitch'
 import type { Tuning } from './pitch'
+import { applyTheme, readThemePreference, saveThemePreference, watchSystemTheme } from './theme'
+import type { ThemePreference } from './theme'
 import './App.css'
 
 const FRETS = Array.from({ length: MAX_FRET + 1 }, (_, fret) => fret)
 
 function App() {
+  const [themePreference, setThemePreference] = useState<ThemePreference>(readThemePreference)
   const player = useRef<PluckPlayer | null>(null)
   const playbackRequest = useRef(0)
   const [soundEnabled, setSoundEnabled] = useState(true)
@@ -21,6 +24,16 @@ function App() {
   const [selected, setSelected] = useState<{ stringNumber: number; fret: number } | null>(null)
   const pitch = selected ? getPitch(selected.stringNumber, selected.fret, tuning) : null
   const answerVisible = Boolean(selected && (showNotes || answerRevealed))
+
+  useEffect(() => {
+    applyTheme(themePreference)
+    return watchSystemTheme(themePreference)
+  }, [themePreference])
+
+  function chooseTheme(preference: ThemePreference) {
+    saveThemePreference(preference)
+    setThemePreference(preference)
+  }
 
   useEffect(() => () => {
     ++playbackRequest.current
@@ -94,8 +107,17 @@ function App() {
   return (
     <div className="app">
       <header className="site-header">
-        <a className="brand" href="#"><span className="brand-icon" aria-hidden="true">♬</span> 弦间 <span className="brand-subtitle">GUITAR PRACTICE</span></a>
-        <span className="version">指板探索 · 01</span>
+        <a className="brand" href="#"><span className="brand-icon" aria-hidden="true">♬</span> Saguadlib <span className="brand-subtitle">GUITAR PRACTICE</span></a>
+        <div className="header-controls">
+          <label className="theme-control">主题
+            <select aria-label="主题" value={themePreference} onChange={(event) => chooseTheme(event.target.value as ThemePreference)}>
+              <option value="system">跟随系统</option>
+              <option value="light">浅色</option>
+              <option value="dark">深色</option>
+            </select>
+          </label>
+          <span className="version">指板探索 · 01</span>
+        </div>
       </header>
 
       <main>
@@ -191,7 +213,7 @@ function App() {
 
         <aside className="tip"><span aria-hidden="true">✦</span><p><strong>试着找找看</strong> 同一根弦的 12 品比空弦高一个八度，音名相同。</p></aside>
       </main>
-      <footer className="site-footer"><span>弦间 · 一点一点，熟悉指板。</span><span>六弦指板 / 0—24 品</span></footer>
+      <footer className="site-footer"><span>Saguadlib · 一点一点，熟悉指板。</span><span>六弦指板 / 0—24 品</span></footer>
     </div>
   )
 }
