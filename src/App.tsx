@@ -1,6 +1,7 @@
 import Navigation from './components/Navigation'
 import FretboardPage from './pages/FretboardPage'
 import SettingsPage from './pages/SettingsPage'
+import ChordsPage from './pages/ChordsPage'
 import PlaceholderPage from './pages/PlaceholderPage'
 import { useAppSettings } from './useAppSettings'
 import { useHashPage } from './useHashPage'
@@ -27,8 +28,9 @@ export default function App() {
       {/* 保持各页实例，返回指板时保留练习位置；hidden 同时排除键盘和无障碍访问。 */}
       <div hidden={page.id !== 'fretboard'}><FretboardPage shared={shared} active={page.id === 'fretboard'} /></div>
       <div hidden={page.id !== 'settings'}><SettingsPage shared={shared} /></div>
-      {page.id !== 'fretboard' && page.id !== 'settings' && <PlaceholderPage title={page.title} description={page.description} />}
+      <div hidden={page.id !== 'chords'}><ChordsPage shared={shared} active={page.id === 'chords'} /></div>
+      {page.id !== 'fretboard' && page.id !== 'settings' && page.id !== 'chords' && <PlaceholderPage title={page.title} description={page.description} />}
     </main>
-    <footer className="site-footer"><span>Saguadlib · 一点一点，熟悉指板。</span><span>{page.title}</span></footer>
+    <footer className="site-footer"><span>Saguadlib · 1145141919810</span><span>{page.title}</span></footer>
   </div>
 }

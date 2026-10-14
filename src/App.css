@@ -201,3 +201,80 @@ dd small { font-size: 10px; display: inline-block; color: var(--accent-text); ma
   .answer-options { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .challenge-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.chord-card { margin-top: 28px; padding: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; }
+.chord-card p { font-size: 14px; line-height: 1.8; }
+.chord-controls { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 24px; }
+.chord-controls label { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.chord-controls select { min-height: 44px; padding: 8px 12px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px; font: inherit; max-width: 100%; }
+.chord-tones { display: flex; flex-wrap: wrap; gap: 12px; padding: 0; list-style: none; }
+.chord-tones li { display: flex; align-items: center; gap: 14px; padding: 12px 20px; background: var(--surface-soft); border-radius: 8px; }
+.chord-tones strong { font-size: 21px; }
+.chord-tones span, .chord-voicing { color: var(--muted); }
+.chord-card button:disabled { background: var(--disabled-bg); color: var(--disabled-text); cursor: default; }
+.chord-workspace .string-row { height: 70px; }
+.chord-workspace .note { width: 40px; height: 40px; font-size: 12px; }
+.chord-root .note { background: var(--accent); color: var(--on-accent); font-weight: 700; box-shadow: 0 0 0 2px var(--on-accent), 0 0 0 5px var(--accent); }
+.chord-member .note { background: var(--surface-soft); color: var(--text); border: 2px solid var(--text); font-weight: 600; }
+.chord-outside .note { background: transparent; color: var(--muted); }
+.chord-degree { position: absolute; bottom: 1px; z-index: 1; font-size: 10px; background: var(--board-bg); color: var(--text); padding: 0 3px; }
+.chord-chosen { outline: 3px solid var(--secondary); outline-offset: -4px; }
+.chord-legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; }
+.chord-controls select:focus-visible { outline: 3px solid var(--secondary); outline-offset: 3px; }
+@media (max-width: 700px) { .chord-card { padding: 20px 16px; } .chord-controls { gap: 16px; } }
+
+/* 和弦交互与实际指型 */
+.chord-layout { display: grid; grid-template-columns: minmax(0,1fr) minmax(340px,1fr); gap: 28px; }
+.chord-control-panel { min-width: 0; }
+.chord-help summary { display: flex; align-items: center; gap: 12px; cursor: pointer; list-style: none; width: fit-content; }
+.chord-help summary::-webkit-details-marker { display: none; }
+.chord-help summary svg { width: 22px; height: 22px; fill: none; stroke: var(--text); stroke-width: 2; }
+.chord-help[open] summary svg { transform: rotate(180deg); }
+.chord-help > div { padding: 18px; border: 1px solid var(--border); background: var(--surface); border-radius: 12px; }
+.chord-help p { line-height: 1.8; font-size: 14px; margin: 0 0 12px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.root-lock { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 18px 0; }
+.reference-control { margin: 20px 0; }
+.reference-control label { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.reference-control select { font: inherit; padding: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; max-width: 100%; min-height: 44px; }
+.current-fingering { padding: 12px; background: var(--surface-soft); border-radius: 8px; }
+.current-fingering p { margin: 0 0 8px; }
+.fingering-browser { min-width: 0; padding-left: 24px; border-left: 1px solid var(--border); }
+.candidate-count, .candidate-filter { font-size: 12px; }
+.candidate-filter { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }
+.candidate-filter input { width: 20px; height: 20px; accent-color: var(--accent); }
+.fingering-cards { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.fingering-card { display: flex; flex-direction: column; align-items: stretch; padding: 6px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 10px; cursor: pointer; font: inherit; min-width: 0; }
+.fingering-card > span { font-size: 10px; line-height: 1.7; overflow-wrap: anywhere; }
+.fingering-card.fingering-active { border: 3px solid var(--accent-text); background: var(--surface-soft); }
+.fingering-diagram { width: 100%; min-height: 140px; }
+.diagram-line { stroke: var(--border); stroke-width: 1.2; }
+.diagram-nut { stroke: var(--text); stroke-width: 4; }
+.diagram-barre { stroke: var(--text); stroke-width: 12; stroke-linecap: round; }
+.diagram-root { fill: var(--accent); stroke: var(--accent-text); stroke-width: 1.5; }
+.diagram-member { fill: var(--text); stroke: var(--text); stroke-width: 1; }
+.diagram-member text { stroke: none; }
+.diagram-ring, .diagram-open { fill: var(--surface); }
+.diagram-root .diagram-open { fill: var(--surface); stroke: var(--accent-text); stroke-width: 2; }
+.diagram-ring { fill: none; }
+.diagram-fret, .diagram-string { fill: var(--muted); font-size: 10px; }
+.candidate-pages { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; font-size: 12px; }
+.candidate-pages button { font-size: 12px; padding: 8px; }
+.chord-workspace .chord-root:not(.shape-sounding) .note, .chord-workspace .chord-member:not(.shape-sounding) .note { background: var(--board-bg); color: var(--accent-text); border: 1px solid var(--accent-text); box-shadow: none; font-weight: 500; }
+.chord-workspace .shape-sounding .note { background: var(--secondary); color: var(--on-accent); border: 2px solid var(--on-accent); box-shadow: 0 0 0 2px var(--secondary); font-weight: 700; }
+.chord-workspace .shape-sounding.chord-root .note { background: var(--accent); box-shadow: 0 0 0 2px var(--on-accent),0 0 0 5px var(--accent); }
+.chord-workspace .scale-member .note { border: 1px dashed var(--secondary); background: transparent; }
+.chord-workspace .chord-outside .note { opacity: .65; }
+.root-anchor { outline: 3px solid var(--secondary); outline-offset: -4px; }
+.chord-workspace .board-scroll { padding-bottom: 10px; }
+.chord-card .sound-button { touch-action: none; }
+.chord-card .sound-button[aria-pressed="true"] { outline: 3px solid var(--secondary); }
+.chord-help summary:focus-visible, .fingering-card:focus-visible, .reference-control select:focus-visible { outline: 3px solid var(--secondary); outline-offset: 3px; }
+@media (max-width: 1100px) { .fingering-cards { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 850px) { .chord-layout { grid-template-columns: minmax(0,1fr); } .fingering-browser { border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 22px; } .fingering-cards { grid-template-columns: repeat(3,minmax(0,1fr)); } }
+@media (max-width: 600px) { .fingering-cards { grid-template-columns: repeat(2,minmax(0,1fr)); } .fingering-diagram { min-height: 170px; } }
+
+.chord-card .sound-button[aria-pressed="false"]:not(:disabled) { background: var(--accent); color: var(--on-accent); }
+.root-lock strong small { display: block; font-size: 11px; color: var(--muted); margin-top: 6px; font-weight: 400; }
+
+.chord-workspace .reference-outside:not(.shape-sounding) .note { opacity: .6; }

@@ -1,6 +1,6 @@
 export const PAGES = [
   { id: 'fretboard', title: '指板与音准', description: '' },
-  { id: 'chords', title: '和弦', description: '和弦探索、吉他指型与逆向识别正在筹备中。' },
+  { id: 'chords', title: '和弦', description: '和弦探索' },
   { id: 'scales', title: '音阶', description: '音阶指板与调内和弦探索正在筹备中。' },
   { id: 'jam', title: 'Jam Session', description: '循环伴奏与指板联动正在筹备中。' },
   { id: 'transcription', title: '扒谱', description: '筹备中，具体功能待确定。' },
