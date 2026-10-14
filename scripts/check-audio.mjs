@@ -8,7 +8,8 @@ async function loadModule(path) {
   }).outputText
   return import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`)
 }
-const { getPitch } = await loadModule('src/pitch.ts')
+const { getPitch: calculatePitch, STANDARD_TUNING, TUNING_PRESETS, validateTuning, parseOpenString } = await loadModule('src/pitch.ts')
+const getPitch = (string, fret, tuning = STANDARD_TUNING) => calculatePitch(string, fret, tuning)
 const { midiToFrequency, createPluckSamples, PluckPlayer } = await loadModule('src/audio.ts')
 for (const [string, fret, label, frequency] of [
   [6, 0, 'E2', 82.4069], [1, 0, 'E4', 329.6276],
@@ -20,7 +21,7 @@ for (const [string, fret, label, frequency] of [
 }
 for (const sampleRate of [44100, 48000]) {
   for (let string = 1; string <= 6; string++) {
-    for (let fret = 0; fret <= 12; fret++) {
+    for (let fret = 0; fret <= 24; fret++) {
       const samples = createPluckSamples(midiToFrequency(getPitch(string, fret).midi), sampleRate)
       assert.equal(samples.length, Math.ceil(sampleRate * 0.9))
       assert.equal(samples[0], 0)
@@ -32,7 +33,37 @@ for (const sampleRate of [44100, 48000]) {
     }
   }
 }
-console.log('通过：五个音高、全部 78 个位置在两种采样率下的幅度与衰减')
+console.log('通过：五个音高、标准调弦全部 150 个位置在两种采样率下的幅度与衰减')
+
+const cases = [
+  ['standard', 6, 0, 'E2', 40], ['standard', 6, 12, 'E3', 52],
+  ['standard', 6, 24, 'E4', 64], ['standard', 1, 24, 'E6', 88],
+  ['drop-d', 6, 0, 'D2', 38], ['drop-d', 6, 2, 'E2', 40], ['drop-d', 6, 24, 'D4', 62],
+  ['half-step', 6, 0, 'E♭2', 39], ['half-step', 1, 0, 'E♭4', 63],
+  ['facgce', 3, 0, 'G3', 55], ['facgce', 2, 0, 'C4', 60],
+]
+const customInputs = STANDARD_TUNING.map((open) => ({ noteName: open.noteName, octave: String(open.octave) }))
+customInputs[5] = { noteName: 'F♯', octave: '2' }
+const custom = validateTuning(customInputs)
+assert.deepEqual(custom.errors, [])
+const pitchCases = cases.map(([id, string, fret, label, midi]) => ({ tuning: TUNING_PRESETS.find((preset) => preset.id === id).tuning, string, fret, label, midi }))
+for (const [fret, label, midi] of [[0, 'F♯2', 42], [12, 'F♯3', 54], [24, 'F♯4', 66]]) {
+  pitchCases.push({ tuning: custom.tuning, string: 6, fret, label, midi })
+}
+for (const tuning of [...TUNING_PRESETS.map((preset) => preset.tuning), custom.tuning]) {
+  for (let string = 1; string <= 6; string++) {
+    for (let fret = 0; fret <= 24; fret++) assert.equal(getPitch(string, fret, tuning).midi, tuning[string - 1].midi + fret)
+  }
+}
+assert.equal(parseOpenString('Eb', '2').midi, 39)
+assert.equal(parseOpenString('D#', '2').midi, 39)
+for (const octave of ['', '-1', '7', '2.5', 'abc']) {
+  const invalid = customInputs.map((input, index) => index === 5 ? { ...input, octave } : input)
+  assert.match(validateTuning(invalid).errors[0], /第 6 弦：八度/)
+}
+assert.match(validateTuning([{ noteName: 'H', octave: '2' }, ...customInputs.slice(1)]).errors[0], /第 1 弦：音名/)
+assert.throws(() => getPitch(1, 25), RangeError)
+console.log('通过：四个预设与自定义全部 750 个位置、升降音及具体输入错误')
 
 const contexts = []
 class MockContext {
@@ -43,7 +74,7 @@ class MockContext {
   sources = []
   constructor() { contexts.push(this) }
   createBuffer(_, length) {
-    return { copyToChannel(samples) { assert.equal(samples.length, length) } }
+    return { copyToChannel(samples) { assert.equal(samples.length, length); this.samples = samples } }
   }
   createGain() {
     return {
@@ -65,9 +96,21 @@ class MockContext {
   async close() { this.state = 'closed' }
 }
 globalThis.window = { AudioContext: MockContext }
+const pitchPlayer = new PluckPlayer()
+for (const { tuning, string, fret, label, midi } of pitchCases) {
+  const pitch = getPitch(string, fret, tuning)
+  assert.equal(pitch.label, label)
+  assert.equal(pitch.midi, midi)
+  await pitchPlayer.play(pitch)
+  const actual = contexts.at(-1).sources.at(-1).buffer.samples
+  assert.deepEqual(actual, createPluckSamples(midiToFrequency(midi), 44100))
+  console.log(`通过：${label}（第 ${string} 弦 ${fret} 品），显示 MIDI ${midi} 与播放波形一致`)
+}
+pitchPlayer.dispose()
+contexts.length = 0
 const player = new PluckPlayer()
 for (let index = 0; index < 100; index++) {
-  assert.equal(await player.play(getPitch(index % 6 + 1, index % 13)), true)
+  assert.equal(await player.play(getPitch(index % 6 + 1, index % 25)), true)
   assert.ok(contexts[0].sources.filter((source) => source.connected).length <= 2)
 }
 assert.equal(contexts.length, 1)

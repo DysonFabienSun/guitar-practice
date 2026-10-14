@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { PluckPlayer } from './audio'
-import { getPitch, STANDARD_TUNING } from './pitch'
+import { getPitch, MAX_FRET, NOTE_OPTIONS, STANDARD_TUNING, TUNING_PRESETS, validateTuning } from './pitch'
+import type { Tuning } from './pitch'
 import './App.css'
 
-const FRETS = Array.from({ length: 13 }, (_, fret) => fret)
+const FRETS = Array.from({ length: MAX_FRET + 1 }, (_, fret) => fret)
 
 function App() {
   const player = useRef<PluckPlayer | null>(null)
@@ -11,8 +12,15 @@ function App() {
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [audioError, setAudioError] = useState('')
   const [showNotes, setShowNotes] = useState(true)
+  const [tuning, setTuning] = useState<Tuning>(STANDARD_TUNING)
+  const [tuningChoice, setTuningChoice] = useState('standard')
+  const [appliedName, setAppliedName] = useState('标准 EADGBE')
+  const [draft, setDraft] = useState(() => STANDARD_TUNING.map((open) => ({ noteName: open.noteName, octave: String(open.octave) })))
+  const [tuningErrors, setTuningErrors] = useState<string[]>([])
+  const [answerRevealed, setAnswerRevealed] = useState(false)
   const [selected, setSelected] = useState({ stringNumber: 6, fret: 0 })
-  const pitch = getPitch(selected.stringNumber, selected.fret)
+  const pitch = getPitch(selected.stringNumber, selected.fret, tuning)
+  const answerVisible = showNotes || answerRevealed
 
   useEffect(() => () => {
     ++playbackRequest.current
@@ -22,11 +30,12 @@ function App() {
 
   async function selectPosition(stringNumber: number, fret: number) {
     setSelected({ stringNumber, fret })
+    setAnswerRevealed(true)
     if (!soundEnabled) return
     const request = ++playbackRequest.current
     try {
       player.current ??= new PluckPlayer()
-      const played = await player.current.play(getPitch(stringNumber, fret))
+      const played = await player.current.play(getPitch(stringNumber, fret, tuning))
       if (played && request === playbackRequest.current) setAudioError('')
     } catch {
       if (request === playbackRequest.current) {
@@ -40,6 +49,35 @@ function App() {
     if (soundEnabled) player.current?.stop()
     setSoundEnabled(!soundEnabled)
     setAudioError('')
+  }
+
+  function applyTuning(next: Tuning, name: string) {
+    ++playbackRequest.current
+    player.current?.stop()
+    setAudioError('')
+    setTuning(next)
+    setAppliedName(name)
+    setAnswerRevealed(false)
+    setTuningErrors([])
+  }
+
+  function chooseTuning(choice: string) {
+    setTuningChoice(choice)
+    setTuningErrors([])
+    setAnswerRevealed(false)
+    if (choice === 'custom') {
+      setDraft(tuning.map((open) => ({ noteName: open.noteName, octave: String(open.octave) })))
+      return
+    }
+    const preset = TUNING_PRESETS.find((item) => item.id === choice)
+    if (preset) applyTuning(preset.tuning, preset.label)
+  }
+
+  function applyCustomTuning(event: React.SubmitEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const result = validateTuning(draft)
+    setTuningErrors(result.errors)
+    if (result.errors.length === 0) applyTuning(result.tuning, '自定义调弦')
   }
 
   return (
@@ -56,15 +94,37 @@ function App() {
           <p>从空弦开始，点击任意位置，探索六根弦上的音高。</p>
         </div>
 
+        <section className="tuning-panel" aria-labelledby="tuning-title">
+          <div className="tuning-panel-header">
+            <h2 id="tuning-title">选择调弦</h2>
+            <label>调弦方式 <select value={tuningChoice} onChange={(event) => chooseTuning(event.target.value)}>
+              {TUNING_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+              <option value="custom">自定义调弦</option>
+            </select></label>
+          </div>
+          <p className="applied-tuning">当前生效：{appliedName} · 从第 6 弦到第 1 弦</p>
+          <div className="open-summary">{[6, 5, 4, 3, 2, 1].map((stringNumber) => <span key={stringNumber}><small>第 {stringNumber} 弦</small><strong>{getPitch(stringNumber, 0, tuning).label}</strong></span>)}</div>
+          {tuningChoice === 'custom' && <form onSubmit={applyCustomTuning} noValidate>
+            <p className="custom-hint">分别设置六根弦，点击“应用调弦”后生效。八度支持 0—6。</p>
+            <div className="custom-strings">{draft.map((input, index) => <fieldset key={index}>
+              <legend>第 {index + 1} 弦{index === 0 ? '（顶部）' : index === 5 ? '（底部）' : ''}</legend>
+              <label>音名<select value={input.noteName} onChange={(event) => setDraft(draft.map((item, i) => i === index ? { ...item, noteName: event.target.value } : item))}>{NOTE_OPTIONS.map((name) => <option key={name}>{name}</option>)}</select></label>
+              <label>八度<input type="number" min="0" max="6" step="1" value={input.octave} onChange={(event) => setDraft(draft.map((item, i) => i === index ? { ...item, octave: event.target.value } : item))} /></label>
+            </fieldset>)}</div>
+            {tuningErrors.length > 0 && <ul className="tuning-errors" role="alert">{tuningErrors.map((error) => <li key={error}>{error}</li>)}</ul>}
+            <button className="sound-button apply-tuning" type="submit">应用调弦</button>
+          </form>}
+        </section>
+
         <section className="workspace" aria-labelledby="fretboard-title">
           <div className="workspace-header">
-            <div><h2 id="fretboard-title">交互式吉他指板</h2><p>标准调弦 <span className="tuning">E · A · D · G · B · E</span></p></div>
+            <div><h2 id="fretboard-title">交互式吉他指板</h2><p>{appliedName} · 0—24 品</p></div>
             <div className="workspace-controls">
             <button type="button" className="sound-button" aria-pressed={soundEnabled} onClick={toggleSound}>
               <span aria-hidden="true">{soundEnabled ? '♪' : '○'}</span> 声音{soundEnabled ? '开' : '关'}
             </button>
             <label className="toggle-label">
-              <input type="checkbox" checked={showNotes} onChange={(event) => setShowNotes(event.target.checked)} />
+              <input type="checkbox" checked={showNotes} onChange={(event) => { setShowNotes(event.target.checked); setAnswerRevealed(false) }} />
               <span className="toggle-track" aria-hidden="true"><span /></span>
               {showNotes ? '隐藏音名' : '显示音名'}
             </label>
@@ -76,34 +136,36 @@ function App() {
             <div className="board">
               <div className="fret-heading"><span>弦 / 品</span>{FRETS.map((fret) => <span key={fret} className={fret === 0 ? 'open-heading' : ''}>{fret}<small>{fret === 0 ? '空弦' : '品'}</small></span>)}</div>
               <div className="strings">
-                {STANDARD_TUNING.map((_, index) => {
+                {tuning.map((_, index) => {
                   const stringNumber = index + 1
                   return (
                     <div className={`string-row string-${stringNumber}`} key={stringNumber}>
-                      <div className="string-label"><strong>{stringNumber} 弦</strong><span>{getPitch(stringNumber, 0).label}</span></div>
+                      <div className="string-label"><strong>{stringNumber} 弦</strong><span>{showNotes ? getPitch(stringNumber, 0, tuning).label : '—'}</span></div>
                       {FRETS.map((fret) => {
-                        const note = getPitch(stringNumber, fret)
+                        const note = getPitch(stringNumber, fret, tuning)
                         const active = selected.stringNumber === stringNumber && selected.fret === fret
-                        return <button key={fret} type="button" className={`fret-cell ${fret === 0 ? 'open-cell' : ''} ${active ? 'selected' : ''}`} aria-label={`第 ${stringNumber} 弦 ${fret} 品，${note.label}`} aria-pressed={active} onClick={() => void selectPosition(stringNumber, fret)}><span className={`note ${showNotes || active ? '' : 'hidden-note'}`}>{showNotes ? note.noteName : active ? '●' : ''}</span></button>
+                        return <button key={fret} type="button" className={`fret-cell ${fret === 0 ? 'open-cell' : ''} ${active ? 'selected' : ''}`} aria-label={`第 ${stringNumber} 弦 ${fret} 品${showNotes ? `，${note.label}` : ''}`} aria-pressed={active} onClick={() => void selectPosition(stringNumber, fret)}><span className={`note ${showNotes || active ? '' : 'hidden-note'}`}>{showNotes ? note.noteName : active ? '●' : ''}</span></button>
                       })}
                     </div>
                   )
                 })}
               </div>
-              <div className="fret-markers" aria-hidden="true"><span />{FRETS.map((fret) => <span key={fret}>{[3, 5, 7, 9].includes(fret) ? '●' : fret === 12 ? '● ●' : ''}</span>)}</div>
+              <div className="fret-markers" aria-hidden="true"><span />{FRETS.map((fret) => <span key={fret}>{[3, 5, 7, 9, 15, 17, 19, 21].includes(fret) ? '●' : [12, 24].includes(fret) ? '● ●' : ''}</span>)}</div>
             </div>
           </div>
           <div className="board-footer"><span><i /> 当前选中位置</span><span>0 品 = 空弦 <b>·</b> 每升一品，升高一个半音</span><span className="scroll-hint">左右滑动查看全部品位 ↔</span></div>
         </section>
 
         <section className="selection" aria-label="选中位置详情" aria-live="polite" aria-atomic="true">
-          <div className="selection-note"><span className="eyebrow">当前音高</span><div>{pitch.noteName}<span>{pitch.octave}</span></div></div>
-          <dl><div><dt>弦号</dt><dd>第 {selected.stringNumber} 弦</dd></div><div><dt>品位</dt><dd>{selected.fret} 品 {selected.fret === 0 && <small>空弦</small>}</dd></div><div><dt>音名</dt><dd>{pitch.noteName}</dd></div><div><dt>八度</dt><dd>{pitch.octave}</dd></div></dl>
+          <div className="selection-note"><span className="eyebrow">当前音高</span><div>{answerVisible ? <>{pitch.noteName}<span>{pitch.octave}</span></> : '?'}</div></div>
+          <dl><div><dt>弦号</dt><dd>第 {selected.stringNumber} 弦</dd></div><div><dt>品位</dt><dd>{selected.fret} 品 {selected.fret === 0 && <small>空弦</small>}</dd></div><div><dt>音名</dt><dd>{answerVisible ? pitch.noteName : '—'}</dd></div><div><dt>八度</dt><dd>{answerVisible ? pitch.octave : '—'}</dd></div></dl>
         </section>
 
-        <aside className="tip"><span aria-hidden="true">✦</span><p><strong>试着找找看</strong> 点击第 5 弦第 3 品，你会找到 C3。同一根弦的 12 品比空弦高一个八度，音名相同。</p></aside>
+        {!showNotes && <p className="guess-hint">先猜音名，再点击位置核对。</p>}
+
+        <aside className="tip"><span aria-hidden="true">✦</span><p><strong>试着找找看</strong> 同一根弦的 12 品比空弦高一个八度，音名相同。</p></aside>
       </main>
-      <footer className="site-footer"><span>弦间 · 一点一点，熟悉指板。</span><span>标准六弦 / 0—12 品</span></footer>
+      <footer className="site-footer"><span>弦间 · 一点一点，熟悉指板。</span><span>六弦指板 / 0—24 品</span></footer>
     </div>
   )
 }
