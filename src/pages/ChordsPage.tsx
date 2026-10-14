@@ -108,7 +108,7 @@ export default function ChordsPage({ shared, active }: { shared: SharedSettings;
   return <>
     <div className="intro chord-intro"><span className="eyebrow">认识和弦</span><details className="chord-help"><summary><h1>和弦探索</h1><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 7l6 6 6-6" /></svg><span className="sr-only">展开或收起说明</span></summary><div>
       <p>未锁定时，点击大指板选择根音位置，寻找包含该位置的常用模板并播放；没有时提示“该位置暂无常用指型”。双击当前根音或使用锁定按钮锁定／解锁；双击会取消等待中的单击试听。</p>
-      <p>锁定后点击任意位置只播放单音。参考音阶主音为当前根音，可以自由选择；建议仅表示包含和弦音，不是唯一对应调式。单音级数采用大写罗马数字及升降号（I、♭III），以后调内和弦才按性质使用 I、ii、iii 等。</p>
+      <p>锁定后点击任意位置只播放单音。参考音阶主音为当前根音，可以自由选择；建议仅表示包含和弦音，不是唯一对应调式。单音使用自定义音程标签：大音程大写、小音程小写、纯音程大写（II、iii、IV）；增减音程保留拼写（♯IV／♭V）。这不是表示调内和弦性质的罗马数字分析。</p>
       <p>最明显的填色标记是实际发声位置；细圈是其他和弦音，虚线圈是参考音阶内音，较弱标记是音阶外音。外音也能演奏。小图左侧为 6 弦、右侧为 1 弦，○ 空弦，× 不弹；圆点内 1—4 为食指到小拇指，不使用拇指；横条只采用模板记录的真实横按。</p>
       <p>单击“播放”发短音，按住超过 220ms 持续稳定音高，松开自然衰减；鼠标、触屏与 Enter／空格都可操作。移出、取消、失焦、静音或离开会停止。</p>
       <p>仅展示常用 CAGED 开放、E／A 横按和局部模板，及已收录的七和弦／扩展握法。每个按弦位置有四指分配，横按不能误压空弦；跨度只是辅助检查。扩展握法仅按各模板明确的规则省略五、九或十一音，卡片列出实际音和省略音。没有模板的调弦／类型不生成组合，锁定后仍可单音探索；模板不代表所有人体工学都适合。</p>
@@ -128,7 +128,7 @@ export default function ChordsPage({ shared, active }: { shared: SharedSettings;
         const position = {string:index+1,fret}, {pitch,tone} = chordToneAt(chord,index+1,fret,tuning)
         const degree = degreeAt(chord,scale,pitch.midi), sounding = current ? contains(current,position) : false
         const isAnchor = anchor.string === index+1 && anchor.fret === fret
-        return <button key={fret} type="button" className={`fret-cell ${fret === 0 ? 'open-cell' : ''} ${tone ? tone.degree === '1' ? 'chord-root' : 'chord-member' : degree.inScale ? 'scale-member' : 'chord-outside'} ${sounding ? 'shape-sounding' : ''} ${isAnchor ? 'root-anchor' : ''} ${scale ? degree.inScale ? 'reference-inside' : 'reference-outside' : ''}`} aria-label={`第 ${index+1} 弦 ${fret} 品，${locked ? degree.label : showNotes ? tone?.noteName ?? pitch.noteName : degree.label}${sounding ? '，实际发声' : ''}${isAnchor ? '，当前根音位置' : ''}${scale && !degree.inScale ? '，参考音阶外' : ''}`} aria-pressed={sounding} onClick={(event) => boardClick(position,event?.detail ?? 0,event?.timeStamp ?? 0)} onDoubleClick={(event) => doubleRoot(position,event.timeStamp)}><span className="note">{locked || !showNotes ? degree.label : tone?.noteName ?? pitch.noteName}</span>{!locked && showNotes && tone && <small className="chord-degree">{degree.label}</small>}</button>
+        return <button key={fret} type="button" className={`fret-cell ${fret === 0 ? 'open-cell' : ''} ${tone ? tone.degree === '1' ? 'chord-root' : 'chord-member' : degree.inScale ? 'scale-member' : 'chord-outside'} ${sounding ? 'shape-sounding' : ''} ${isAnchor ? 'root-anchor' : ''} ${scale ? degree.inScale ? 'reference-inside' : 'reference-outside' : ''}`} aria-label={`第 ${index+1} 弦 ${fret} 品，${locked ? degree.label : tone?.noteName ?? pitch.noteName}${sounding ? '，实际发声' : ''}${isAnchor ? '，当前根音位置' : ''}${scale && !degree.inScale ? '，参考音阶外' : ''}`} aria-pressed={sounding} onClick={(event) => boardClick(position,event?.detail ?? 0,event?.timeStamp ?? 0)} onDoubleClick={(event) => doubleRoot(position,event.timeStamp)}><span className="note">{locked ? degree.label : tone?.noteName ?? pitch.noteName}</span></button>
       })}</div>)}</div><div className="fret-markers" aria-hidden="true"><span />{FRETS.map((fret) => <span key={fret}>{[12,24].includes(fret) ? '● ●' : [3,5,7,9,15,17,19,21].includes(fret) ? '●' : ''}</span>)}</div></div></div>
     </section>
   </>

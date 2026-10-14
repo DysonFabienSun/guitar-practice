@@ -284,3 +284,23 @@ dd small { font-size: 10px; display: inline-block; color: var(--accent-text); ma
 .position-filter { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; font-size: 12px; }
 .position-filter select { color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 7px; min-height: 40px; padding: 8px; max-width: 100%; }
 .shape-template { font-weight: 700; margin-bottom: 4px; }
+
+.scale-workspace .scale-note { width: 48px; height: 48px; min-width: 48px; max-width: 48px; min-height:48px; flex-shrink:0; aspect-ratio:1; box-sizing:border-box; border-radius:50%; padding: 0 2px; font-size: 13px; white-space: nowrap; }
+.scale-workspace .chord-outside .note { opacity: .55; }
+.scale-workspace .scale-playing .note { outline: 3px solid var(--secondary); outline-offset: 3px; }
+.scale-workspace .scale-playing .note { background: var(--secondary); color: var(--on-accent); opacity: 1; border-color: var(--on-accent); box-shadow: 0 0 0 2px var(--secondary); }
+.scale-range { align-self: center; }
+.scale-card h2 { font-size: 20px; }
+.scale-card .chord-controls select { min-width: 0; }
+@media (max-width:700px) { .scale-card .chord-controls label { width:100%; } .scale-card .chord-controls select { max-width:100%; flex:1; } }
+
+.scale-workspace .scale-note { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.15; }
+.scale-note strong { font-size:13px; }
+.scale-note small { font-size:11px; }
+
+.scale-card .chord-playback { display:flex; flex-wrap:wrap; gap:10px; }
+
+.scale-card input[type="number"] { width:100px; min-height:44px; padding:8px; font:inherit; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px; }
+.scale-card input:focus-visible { outline:3px solid var(--secondary); outline-offset:3px; }
+.scale-card input[aria-invalid="true"] { border-color:var(--error); }
+.tempo-hint { color:var(--muted); font-size:13px; }

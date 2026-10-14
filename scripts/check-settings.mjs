@@ -37,6 +37,7 @@ window.localStorage = { getItem() { throw new Error('blocked') }, setItem() { th
 assert.deepEqual(readPreferences(), defaults)
 assert.equal(savePreferences(defaults), false)
 assert.equal(PAGES.length, 7)
+assert.deepEqual(PAGES.map(p=>p.id),['fretboard','scales','chords','jam','transcription','settings','about'])
 for (const page of PAGES) assert.equal(pageFromHash(`#/${page.id}`).id, page.id)
 for (const hash of ['', '#/', '#/unknown', '#/settings/extra']) assert.equal(pageFromHash(hash).id, 'fretboard')
 console.log('通过：七个 hash 地址、无效地址回退；四预设与自定义保存；无效字段、损坏 JSON、旧版本和存储异常回退')

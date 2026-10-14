@@ -41,7 +41,9 @@ globalThis.__guitarTestHooks = {
 const hookUrl = dataUrl('export const { useState, useRef, useEffect, useMemo, useSyncExternalStore } = globalThis.__guitarTestHooks')
 globalThis.__chordAudioChecks = { plays: [], stops: 0 }
 const chordAudioUrl = dataUrl(`export class ChordPlayer { async prepare() {} async hold(pitches) { return this.play(pitches,"hold") } release() { this.stop() } async play(pitches, mode) { globalThis.__chordAudioChecks.plays.push({pitches, mode}); return true } stop() { globalThis.__chordAudioChecks.stops++ } dispose() { this.stop() } }`)
-const moduleUrl = createModuleLoader({ react: hookUrl, '../chordAudio': chordAudioUrl })
+globalThis.__scaleUI = {plays:[],stops:0,fail:false,bpm:120}
+const scaleAudioUrl = dataUrl(`export class ScalePlayer {setBpm(bpm){globalThis.__scaleUI.bpm=bpm}async play(pitches,bpm,onNote,random=false){const state=globalThis.__scaleUI;if(state.fail)throw Error('failed');state.plays.push({pitches,bpm,random});onNote(pitches[0].midi);return !random}stop(){globalThis.__scaleUI.stops++}dispose(){this.stop()}}`)
+const moduleUrl = createModuleLoader({ react: hookUrl, '../chordAudio': chordAudioUrl, '../scaleAudio': scaleAudioUrl })
 const { default: App } = await import(moduleUrl('src/App.tsx'))
 let tree
 function expand(node, path = 'root') {
@@ -196,7 +198,7 @@ for (const [fret, octave] of [[0, 2], [12, 3], [24, 4]]) {
   assert.equal(text(byClass('selection-note')), `当前音高F♯${octave}`)
 }
 // 七个地址、占位页与共享设置，以及返回指板后的局部练习状态。
-for (const id of ['scales', 'jam', 'transcription', 'about']) {
+for (const id of ['jam', 'transcription', 'about']) {
   navigate(id)
   assert.match(text(byClass('site-footer')), /1145141919810/)
   assert.match(text(byClass('placeholder-page')), /筹备中/)
@@ -229,6 +231,39 @@ navigate('fretboard')
 assert.match(text(byClass('open-summary')), /E2/)
 assert.match(text(byClass('sound-button')), /声音开/)
 assert.match(boardButtons()[149].props['aria-label'], /E4/)
+// 音阶独立选择、共享设置、单音不改主音、试听及显示状态。
+assert.deepEqual(nodes(byClass('desktop-navigation')).filter(n=>n.type==='a').map(text),['指板与音准','音阶','和弦','Jam Session','扒谱','设置','简介'])
+navigate('scales')
+const scaleSelect=(name,value)=>{find(n=>n.type==='select'&&n.props['aria-label']===name).props.onChange({target:{value}});render()}
+const scaleButton=name=>find(n=>n.type==='button'&&text(n)===name)
+const scaleNames=()=>nodes(tree).filter(n=>n.type==='strong'&&nodes(byClass('chord-tones scale-tones')).includes(n)).map(text)
+assert.deepEqual(scaleNames(),['C','D','E','F','G','A','B']);assert.equal(boardButtons().length,150)
+assert.equal(find(n=>n.type==='select'&&n.props['aria-label']==='音阶显示方式').props.value,'degree')
+assert.equal(find(n=>n.type==='details').props.open,undefined)
+scaleSelect('音阶主音','D');scaleSelect('音阶类型','dorian');assert.deepEqual(scaleNames(),['D','E','F','G','A','B','C'])
+assert.equal(text(byClass('scale-formula')),'公式：I、II、♭III、IV、V、VI、♭VII')
+scaleSelect('音阶主音','A');scaleSelect('音阶类型','minor-pentatonic');assert.deepEqual(scaleNames(),['A','C','D','E','G'])
+await click(6,3);assert.equal(find(n=>n.type==='select'&&n.props['aria-label']==='音阶主音').props.value,'A');assert.equal(globalThis.__scaleUI.plays.at(-1).pitches[0].midi,43)
+assert.ok(boardButtons().filter(n=>n.props.className.includes('scale-playing')).length>0)
+scaleButton('停止').props.onClick();render();assert.ok(boardButtons().every(n=>!n.props.className.includes('scale-playing')))
+scaleSelect('音阶显示方式','both');assert.match(text(boardButtons()[0]),/[A-G].*[IV]/)
+find(n=>n.type==='input'&&n.props['aria-label']==='试听速度').props.onChange({target:{value:'300'}});render();scaleButton('上行＋下行').props.onClick();await Promise.resolve();render()
+const sequence=globalThis.__scaleUI.plays.at(-1);assert.equal(sequence.bpm,300);assert.equal(sequence.pitches.length,11);assert.equal(sequence.pitches[0].midi,sequence.pitches.at(-1).midi)
+const beforeLeave=globalThis.__scaleUI.stops;navigate('chords');assert.ok(globalThis.__scaleUI.stops>beforeLeave)
+assert.match(text(byClass('chord-description')),/C · 大三和弦/)
+navigate('scales');assert.deepEqual(scaleNames(),['A','C','D','E','G'])
+navigate('settings');choose('facgce');navigate('scales');await click(6,0);assert.equal(globalThis.__scaleUI.plays.at(-1).pitches[0].midi,41)
+navigate('settings');soundCheckbox().props.onChange({target:{checked:false}});render();navigate('scales');assert.equal(scaleButton('上行').props.disabled,true)
+scaleButton('启用声音').props.onClick();render();assert.equal(scaleButton('上行').props.disabled,false)
+assert.ok(!text(tree).includes('试听结束'))
+scaleButton('随机').props.onClick();await Promise.resolve();render();assert.equal(globalThis.__scaleUI.plays.at(-1).random,true)
+const randomCount=globalThis.__scaleUI.plays.length
+find(n=>n.type==='input'&&n.props['aria-label']==='试听速度').props.onChange({target:{value:'120'}});render();assert.equal(globalThis.__scaleUI.bpm,120);assert.equal(globalThis.__scaleUI.plays.length,randomCount)
+for(const value of ['', '59','301','invalid']){find(n=>n.type==='input'&&n.props['aria-label']==='试听速度').props.onChange({target:{value}});render();assert.equal(scaleButton('随机').props.disabled,true);assert.equal(globalThis.__scaleUI.bpm,120)}
+find(n=>n.type==='input'&&n.props['aria-label']==='试听速度').props.onChange({target:{value:'60'}});render();scaleButton('停止').props.onClick();render();assert.equal(scaleButton('随机').props['aria-pressed'],false)
+globalThis.__scaleUI.fail=true;scaleButton('上行').props.onClick();await Promise.resolve();await Promise.resolve();render();assert.match(text(byClass('scale-status')),/无法播放/);globalThis.__scaleUI.fail=false
+navigate('settings');choose('standard');navigate('scales');scaleSelect('音阶主音','C');scaleSelect('音阶类型','major')
+console.log('通过：导航顺序、音阶三组组成音、150位置、单音不改变主音、试听速度/高亮/停止、独立页面状态、FACGCE/静音/播放失败')
 // 升级和弦页：真实指型、单双击、锁定后单音、参考音阶、分页及共享设置。
 navigate('chords')
 const chordSelect=(name,value)=>{find(node=>node.type==='select'&&node.props['aria-label']===name).props.onChange({target:{value}});render()}
@@ -247,6 +282,7 @@ assert.equal(boardButtons().length,150)
 assert.equal(find(node=>node.type==='details').props.open,undefined,'说明默认折叠')
 assert.ok(!nodes(tree).some(node=>node.props?.className==='chord-legend'||node.props?.className==='chord-voicing'))
 await click(6,0);assert.match(text(byClass('chord-description')),/Em · 小三和弦/)
+assert.equal(text(chordCell(6,1)),'F','未锁定显示实际音名')
 assertPlayedPositions()
 const anchorButton=chordCell(6,0), playsBeforeDouble=globalThis.__chordAudioChecks.plays.length
 anchorButton.props.onClick({detail:1,timeStamp:1000});anchorButton.props.onClick({detail:2,timeStamp:1100});render()
@@ -258,7 +294,7 @@ assert.match(text(byClass('root-lock')),/已锁定 · E/)
 assert.equal(globalThis.__chordAudioChecks.plays.at(-1).pitches.length,1)
 assert.equal(globalThis.__chordAudioChecks.plays.at(-1).pitches[0].midi,41)
 assert.match(chordCell(6,1).props.className,/chord-outside/)
-assert.equal(text(chordCell(6,1)),'♭II')
+assert.equal(text(chordCell(6,1)),'ii')
 chordSelect('参考音阶','lydian');assert.match(text(byClass('reference-control')),/E · 利底亚/)
 assert.match(text(byClass('root-lock')),/已锁定 · E/)
 chordButton('解锁根音').props.onClick();render();assert.match(text(byClass('root-lock')),/未锁定/)

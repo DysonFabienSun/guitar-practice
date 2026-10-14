@@ -8,13 +8,12 @@ export function midiToFrequency(midi: number) {
 }
 
 /** 基音与逐渐衰减的泛音，4ms 起音、末尾淡出；峰值不超过 0.18。 */
-export function createPluckSamples(frequency: number, sampleRate: number) {
-  const duration = 0.9
+export function createPluckSamples(frequency: number, sampleRate: number, duration = 0.9) {
   const samples = new Float32Array(Math.ceil(duration * sampleRate))
   for (let index = 0; index < samples.length; index++) {
     const time = index / sampleRate
     const attack = Math.min(time / 0.004, 1)
-    const release = Math.min((duration - time) / 0.035, 1)
+    const release = Math.min((duration - time) / Math.min(0.035,duration*0.2), 1)
     let value = 0
     for (let harmonic = 1; harmonic <= 6; harmonic++) {
       if (frequency * harmonic >= sampleRate / 2) break

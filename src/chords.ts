@@ -1,4 +1,5 @@
-import { getPitch, parseOpenString } from './pitch'
+import { rootPitchClass, spellTone } from './intervals'
+import { getPitch } from './pitch'
 import type { Tuning } from './pitch'
 
 export const CHORD_TYPES = [
@@ -49,25 +50,13 @@ export const CHORD_TYPES = [
 ] as const
 export type ChordTypeId = typeof CHORD_TYPES[number]['id']
 export const CHORD_CATEGORIES = [...new Set(CHORD_TYPES.map((type) => type.category))]
-const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
-const NATURALS = [0, 2, 4, 5, 7, 9, 11]
-const modulo = (value: number) => (value % 12 + 12) % 12
-
 /** 按级数选择字母，再按绝对半音补升降号；保留正确的三度／五度拼写。 */
 export function buildChord(root: string, typeId: ChordTypeId) {
   root = root.trim().replace('#', '♯').replace('b', '♭')
-  const rootClass = modulo(parseOpenString(root, '3').midi)
+  const rootClass = rootPitchClass(root)
   const type = CHORD_TYPES.find((item) => item.id === typeId)
   if (!type) throw new RangeError('未知和弦类型')
-  const rootLetter = LETTERS.indexOf(root[0])
-  const tones = type.semitones.map((offset, index) => {
-    const degree = type.degrees[index]
-    const letterIndex = (rootLetter + Number(degree.match(/\d+/)?.[0]) - 1) % 7
-    const pitchClass = modulo(rootClass + offset)
-    const accidental = modulo(pitchClass - NATURALS[letterIndex] + 6) - 6
-    const noteName = LETTERS[letterIndex] + (accidental >= 0 ? '♯'.repeat(accidental) : '♭'.repeat(-accidental))
-    return { noteName, degree, offset, pitchClass, natural: NATURALS[letterIndex], accidental }
-  })
+  const tones = type.semitones.map((offset, index) => spellTone(root,offset,type.degrees[index]))
   return { root, rootClass, type, name: root + type.symbol, tones }
 }
 export type Chord = ReturnType<typeof buildChord>
