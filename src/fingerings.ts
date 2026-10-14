@@ -1,9 +1,14 @@
 import { getPitch, MAX_FRET } from './pitch'
 import type { Tuning } from './pitch'
 import type { Chord } from './chords'
+import { FINGERING_TEMPLATES } from './fingeringTemplates'
+import type { Barre, TuningProfile } from './fingeringTemplates'
 export type Position = { string: number; fret: number }
-export type Fingering = { id: string; frets: (number | null)[]; span: number; pressed: number; omitted: string[]; barre: { fret: number; from: number; to: number } | null }
-const cache = new Map<string, Fingering[]>()
+export type Fingering = {
+  id: string; frets: (number | null)[]; fingers: (number | null)[]; barres: Barre[];
+  roots: Position[]; primaryRoot: Position; span: number; pressed: number; omitted: string[];
+  templateId: string; templateLabel: string; family: string; kind: string; allowOmit: string[];
+}
 export function contains(shape: Fingering, point: Position) { return shape.frets[point.string - 1] === point.fret }
 export function fingeringPitches(shape: Fingering, tuning: Tuning, chord?: Chord) {
   return shape.frets.flatMap((fret,index) => {
@@ -14,75 +19,90 @@ export function fingeringPitches(shape: Fingering, tuning: Tuning, chord?: Chord
     return [{ ...pitch,noteName,octave,label: `${noteName}${octave}`,string:index+1,fret }]
   }).reverse()
 }
-export function rootPosition(chord: Chord, tuning: Tuning, preferred?: Position | null): Position {
-  const roots: Position[] = []
-  for (let string = 1; string <= 6; string++) for (let fret = 0; fret <= MAX_FRET; fret++) if (getPitch(string, fret, tuning).midi % 12 === chord.rootClass) roots.push({ string, fret })
-  roots.sort((a,b) => (Math.abs(a.fret - (preferred?.fret ?? 0)) * 2 + Math.abs(a.string - (preferred?.string ?? 6))) - (Math.abs(b.fret - (preferred?.fret ?? 0)) * 2 + Math.abs(b.string - (preferred?.string ?? 6))))
-  return roots[0]
+
+export function tuningProfile(tuning: Tuning): TuningProfile | null {
+  const profiles = { standard: [64,59,55,50,45,40], 'half-step': [63,58,54,49,44,39], 'drop-d': [64,59,55,50,45,38] }
+  return (Object.entries(profiles).find(([,midi]) => tuning.length === 6 && tuning.every((open,i) => open.midi === midi[i]))?.[0] as TuningProfile | undefined) ?? null
 }
-/** 只分析最低按弦品位的单一横按：区间内没有空弦／不弹弦，且均不低于横按品位。 */
-export function analyzeBarre(frets: (number | null)[]) {
-  const pressed = frets.filter((fret): fret is number => fret !== null && fret > 0)
-  if (!pressed.length) return null
-  const fret = Math.min(...pressed), indices = frets.flatMap((value,index) => value === fret ? [index] : [])
-  if (indices.length < 2) return null
-  const from = indices[0], to = indices.at(-1)!
-  if (frets.slice(from,to+1).some((value) => value === null || value < fret)) return null
-  return { fret, from: from + 1, to: to + 1 }
+/** 结构反例检查，不是自动人体工学证明；展示资格首先来自常用模板白名单。 */
+export function validateHandPlan(frets: readonly (number | null)[], fingers: readonly (number | null)[], barres: readonly Barre[]) {
+  const errors: string[] = []
+  if (frets.length !== 6 || fingers.length !== 6) return ['需要六弦品位和手指计划']
+  frets.forEach((fret,index) => {
+    const finger = fingers[index]
+    if (fret === null ? finger !== null : fret === 0 ? finger !== 0 : !Number.isInteger(fret) || fret < 1 || fret > MAX_FRET || !Number.isInteger(finger) || finger! < 1 || finger! > 4) errors.push(`第 ${index+1} 弦手指分配无效`)
+  })
+  for (const barre of barres) {
+    if (!Number.isInteger(barre.finger) || barre.finger < 1 || barre.finger > 4 || !Number.isInteger(barre.fret) || barre.fret < 1 || barre.fret > MAX_FRET || !Number.isInteger(barre.from) || !Number.isInteger(barre.to) || barre.from < 1 || barre.to > 6 || barre.from >= barre.to) { errors.push('横按范围无效'); continue }
+    for (let string = barre.from; string <= barre.to; string++) {
+      const fret = frets[string-1]
+      if (fret === null || fret < barre.fret) errors.push('横按会误压空弦或穿过不弹弦')
+      if (fret === barre.fret && fingers[string-1] !== barre.finger) errors.push('横按同品分配冲突')
+    }
+    if (frets[barre.from-1] !== barre.fret || frets[barre.to-1] !== barre.fret) errors.push('横按端点不对应实际按弦')
+  }
+  const fingerFrets: number[] = []
+  for (let finger = 1; finger <= 4; finger++) {
+    const positions = frets.flatMap((fret,index) => fingers[index] === finger && fret !== null ? [{string:index+1,fret}] : [])
+    if (!positions.length) continue
+    if (new Set(positions.map((point) => point.fret)).size > 1) errors.push('同一手指不能同时按不同品位')
+    if (positions.length > 1 && !barres.some((barre) => barre.finger === finger && positions.every((point) => point.fret === barre.fret && point.string >= barre.from && point.string <= barre.to))) errors.push('重复使用手指必须有明确同品横按')
+    if (barres.filter((barre) => barre.finger === finger).length > 1) errors.push('同一手指只能有一段横按')
+    fingerFrets.push(positions[0].fret)
+  }
+  // 保守拒绝反向手指顺序；不尝试制造交叉指法。
+  if (fingerFrets.some((fret,i) => i > 0 && fret < fingerFrets[i-1])) errors.push('手指顺序明显交叉')
+  if (fingerFrets.length && Math.max(...fingerFrets)-Math.min(...fingerFrets) > 4) errors.push('按弦过度伸展')
+  return errors
 }
-/** 穷举当前筛选下的全部候选，不设结果上限；每弦一个音，可不弹，纯空弦不占跨度。 */
+/** 仅定位已声明模板和合理移调；不自由组合，不保留旧枚举缓存。 */
 export function generateFingerings(chord: Chord, tuning: Tuning, maxSpan = 4): Fingering[] {
   if (!Number.isInteger(maxSpan) || maxSpan < 0 || maxSpan > 4) throw new RangeError('跨度须为 0—4 品')
-  const key = JSON.stringify([chord.type.id, chord.root, chord.rootClass, tuning, maxSpan])
-  const cached = cache.get(key)
-  if (cached) return cached
-  const allMask = (1 << chord.tones.length) - 1
-  const requiredMask = chord.tones.reduce((mask,tone,index) => chord.type.optional.some((degree) => degree === tone.degree) ? mask : mask | (1 << index), 0)
-  const toneBits = new Map(chord.tones.map((tone,index) => [tone.pitchClass, 1 << index]))
-  const result = new Map<string, Fingering>()
-  // 每个非空弦指型至少属于一个跨度窗口，重复结果按六弦品位去重。
-  for (let start = 1; start <= MAX_FRET; start++) {
-    const options = tuning.map((_,index) => {
-      const values = [{ fret: null as number | null, bit: 0 }]
-      for (const fret of [0, ...Array.from({ length: Math.min(maxSpan + 1, MAX_FRET - start + 1) },(_,i) => start + i)]) {
-        const bit = toneBits.get(getPitch(index+1,fret,tuning).midi % 12)
-        if (bit) values.push({ fret, bit })
-      }
-      return values
-    })
-    const remainingMasks = Array<number>(7).fill(0)
-    for (let i = 5; i >= 0; i--) remainingMasks[i] = remainingMasks[i+1] | options[i].reduce((mask,option) => mask | option.bit, 0)
-    const frets: (number | null)[] = []
-    function visit(string: number, mask: number, sounding: number) {
-      if (((mask | remainingMasks[string]) & requiredMask) !== requiredMask) return
-      if (string === 6) {
-        if ((mask & requiredMask) !== requiredMask || sounding < chord.tones.length - chord.type.optional.length) return
-        const id = frets.map((fret) => fret ?? 'x').join('-')
-        if (result.has(id)) return
-        const pressed = frets.filter((fret): fret is number => fret !== null && fret > 0)
-        const span = pressed.length ? Math.max(...pressed) - Math.min(...pressed) : 0
-        if (span > maxSpan) return
-        const omitted = mask === allMask ? [] : chord.tones.filter((_,i) => !(mask & (1 << i))).map((tone) => tone.noteName)
-        result.set(id,{ id, frets: [...frets], span, pressed: pressed.length, omitted, barre: analyzeBarre(frets) })
-        return
-      }
-      for (const option of options[string]) { frets.push(option.fret); visit(string+1,mask | option.bit,sounding + (option.fret === null ? 0 : 1)); frets.pop() }
+  const profile = tuningProfile(tuning)
+  if (!profile) return []
+  const result = new Map<string,Fingering>()
+  for (const template of FINGERING_TEMPLATES) {
+    if (template.type !== chord.type.id || !template.profiles.includes(profile)) continue
+    for (const shift of template.movable ? Array.from({length:49},(_,i) => i-24) : [0]) {
+      const frets = [...template.frets].reverse().map((fret) => fret === null ? null : fret+shift)
+      // 可移动模板只产生封闭形；开放形必须有独立手指计划。
+      if (frets.some((fret) => fret !== null && (fret < (template.movable ? 1 : 0) || fret > MAX_FRET))) continue
+      const fingers = [...template.fingers].reverse()
+      const barres = template.barres.map((barre) => ({...barre,fret:barre.fret+shift}))
+      if (validateHandPlan(frets,fingers,barres).length) continue
+      const primaryRoot = {string:template.root.string,fret:template.root.fret+shift}
+      if (frets[primaryRoot.string-1] !== primaryRoot.fret || getPitch(primaryRoot.string,primaryRoot.fret,tuning).midi % 12 !== chord.rootClass) continue
+      const pitches = frets.flatMap((fret,index) => fret === null ? [] : [getPitch(index+1,fret,tuning)])
+      if (pitches.some((pitch) => !chord.tones.some((tone) => tone.pitchClass === pitch.midi % 12))) continue
+      const missing = chord.tones.filter((tone) => !pitches.some((pitch) => pitch.midi % 12 === tone.pitchClass))
+      if (missing.some((tone) => !template.omitDegrees.includes(tone.degree))) continue
+      const pressed = frets.filter((fret): fret is number => fret !== null && fret > 0)
+      const span = pressed.length ? Math.max(...pressed)-Math.min(...pressed) : 0
+      if (span > maxSpan) continue
+      const id = frets.map((fret) => fret ?? 'x').join('-')
+      if (result.has(id)) continue
+      const roots = frets.flatMap((fret,index) => fret !== null && getPitch(index+1,fret,tuning).midi % 12 === chord.rootClass ? [{string:index+1,fret}] : [])
+      result.set(id,{id,frets,fingers,barres,primaryRoot,roots,span,pressed:pressed.length,omitted:missing.map((tone) => tone.noteName),templateId:template.id,templateLabel:template.label,family:template.family,kind:template.kind,allowOmit:template.omitDegrees})
     }
-    visit(0,0,0)
   }
-  const shapes = [...result.values()]
-  if (cache.size >= 6) cache.delete(cache.keys().next().value!)
-  cache.set(key,shapes)
-  return shapes
+  return [...result.values()].sort((a,b) => positionOf(a)-positionOf(b) || templatePriority(a)-templatePriority(b) || a.id.localeCompare(b.id))
+}
+export function positionOf(shape: Fingering) {
+  if (shape.kind === '开放') return 0
+  return Math.min(...shape.frets.filter((fret): fret is number => fret !== null && fret > 0))
+}
+const templatePriority = (shape: Fingering) => shape.kind === '开放' ? 0 : ['E','A'].includes(shape.family) && shape.kind === '横按' ? 1 : shape.kind === '局部' ? 2 : 3
+export function rootPosition(chord: Chord, tuning: Tuning, preferred?: Position | null): Position {
+  if (preferred && getPitch(preferred.string,preferred.fret,tuning).midi % 12 === chord.rootClass) return preferred
+  const shapes = generateFingerings(chord,tuning)
+  const distance = (point: Position) => preferred ? Math.abs(point.fret-preferred.fret)*2+Math.abs(point.string-preferred.string) : point.fret
+  const ordered = preferred ? [...shapes].sort((a,b) => distance(a.primaryRoot)-distance(b.primaryRoot) || positionOf(a)-positionOf(b)) : shapes
+  if (ordered.length) return ordered[0].primaryRoot
+  // 无模板仍保留真正的单音根音位置，绝不当作和弦配音。
+  const roots: Position[] = []
+  for (let string=1; string<=6; string++) for (let fret=0; fret<=MAX_FRET; fret++) if (getPitch(string,fret,tuning).midi % 12 === chord.rootClass) roots.push({string,fret})
+  return roots.sort((a,b) => distance(a)-distance(b))[0]
 }
 export function rankedFingerings(shapes: readonly Fingering[], anchor: Position, onlyAnchor = false) {
-  const cost = (shape: Fingering) => {
-    const pressed = shape.frets.filter((fret): fret is number => fret !== null && fret > 0)
-    const distance = pressed.length ? Math.max(...pressed.map((fret) => Math.abs(fret - anchor.fret))) : anchor.fret
-    const fingers = shape.pressed - (shape.barre ? shape.frets.filter((fret) => fret === shape.barre!.fret).length - 1 : 0)
-    const soundingIndices = shape.frets.flatMap((fret,index) => fret === null ? [] : [index])
-    const gaps = soundingIndices.length ? shape.frets.slice(soundingIndices[0],soundingIndices.at(-1)!+1).filter((fret) => fret === null).length : 0
-    return shape.omitted.length * 15 + distance * 20 + shape.span * 3 + fingers * 2 + Math.max(0,fingers-4)*40 + gaps*15 + shape.frets.filter((fret) => fret === null).length
-  }
-  return shapes.filter((shape) => !onlyAnchor || contains(shape,anchor)).sort((a,b) => Number(contains(b,anchor)) - Number(contains(a,anchor)) || cost(a) - cost(b) || a.id.localeCompare(b.id))
+  return shapes.filter((shape) => !onlyAnchor || contains(shape,anchor)).sort((a,b) => Number(contains(b,anchor))-Number(contains(a,anchor)) || positionOf(a)-positionOf(b) || templatePriority(a)-templatePriority(b) || a.span-b.span || a.id.localeCompare(b.id))
 }

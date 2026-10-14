@@ -269,14 +269,27 @@ const totalPagesText=text(byClass('candidate-pages'))
 chordButton('下一页').props.onClick();render();assert.notEqual(text(byClass('candidate-pages')),totalPagesText)
 find(node=>node.type==='button'&&node.props.className?.startsWith('fingering-card')).props.onClick();render();assertPlayedPositions()
 chordSelect('和弦类别','扩展');chordSelect('和弦类型','13')
-assert.match(text(byClass('chord-description')),/13/)
+await click(5,3);assert.match(text(byClass('chord-description')),/C13/)
 assert.match(text(byClass('current-fingering')),/省略音/)
 assertPlayedPositions()
+chordSelect('和弦类别','基础');chordSelect('和弦类型','major')
 navigate('settings');choose('drop-d');navigate('chords')
 await click(6,0);assert.match(text(byClass('root-lock')),/未锁定 · D/)
 assertPlayedPositions()
 const actual=globalThis.__chordAudioChecks.plays.at(-1).pitches
 assert.ok(actual.every(p=>p.midi===[64,59,55,50,45,38][p.string-1]+p.fret))
+// 有其他位置的常用模板，不代表任意所选位置都能用；不自动换成虚拟配音。
+chordSelect('和弦类别','基础');chordSelect('和弦类型','major')
+navigate('settings');choose('standard');navigate('chords')
+await click(6,24);assert.match(text(byClass('chord-control-panel')),/该位置暂无常用指型/)
+assert.equal(chordButton('播放').props.disabled,true)
+navigate('settings');choose('drop-d');navigate('chords')
+await click(6,0)
+const bandSelect=find(node=>node.type==='select'&&node.props['aria-label']==='指型把位')
+bandSelect.props.onChange({target:{value:'open'}});render()
+assert.ok(nodes(tree).filter(node=>node.type==='button'&&node.props.className?.startsWith('fingering-card')).every(node=>text(node).includes('开放')))
+find(node=>node.type==='select'&&node.props['aria-label']==='指型把位').props.onChange({target:{value:'all'}});render()
+
 // 鼠标/触屏取消、键盘长按及窗口失焦都走同一取消路径。
 const originalSetTimeout=globalThis.setTimeout, originalClearTimeout=globalThis.clearTimeout
 let holdCallback=null
@@ -308,11 +321,23 @@ globalThis.setTimeout=originalSetTimeout;globalThis.clearTimeout=originalClearTi
 // 小图从同一个指型生成：左侧6弦、右侧1弦、五品窗口、横按与根音标记。
 const diagramSvg=nodes(tree).find(node=>node.type==='svg'&&node.props.className==='fingering-diagram')
 assert.ok(diagramSvg)
-const markers=nodes(diagramSvg).filter(node=>node.type==='g')
-assert.equal(markers.length,6)
-assert.deepEqual(markers.map(node=>node.key),['1','2','3','4','5','6'])
+const markers=nodes(diagramSvg).filter(node=>node.type==='g'&&['diagram-root','diagram-member'].includes(node.props.className))
+assert.equal(markers.filter(node=>['diagram-root','diagram-member'].includes(node.props.className)).length,6)
+assert.deepEqual(markers.filter(node=>['diagram-root','diagram-member'].includes(node.props.className)).map(node=>node.key),['1','2','3','4','5','6'])
 assert.equal(nodes(diagramSvg).filter(node=>node.type==='text'&&node.props.className==='diagram-string').map(text).join(''),'654321')
 console.log('通过：长按移出/取消/捕获丢失/失焦、键盘重复键保护、释放，六弦 SVG 顺序与同源图示')
+
+chordSelect('和弦类别','变化');chordSelect('和弦类型','7b9#11b13')
+assert.match(text(byClass('chord-control-panel')),/暂无已验证常用指型/)
+chordSelect('和弦类别','基础');chordSelect('和弦类型','major')
+navigate('settings');choose('facgce');navigate('chords')
+assert.match(text(byClass('chord-control-panel')),/当前调弦暂无已验证常用指型/)
+chordButton('锁定根音').props.onClick();render();const beforeSingle=globalThis.__chordAudioChecks.plays.length
+await click(6,0);assert.equal(globalThis.__chordAudioChecks.plays.length,beforeSingle+1)
+assert.equal(globalThis.__chordAudioChecks.plays.at(-1).pitches.length,1)
+assert.equal(globalThis.__chordAudioChecks.plays.at(-1).pitches[0].midi,41)
+chordSelect('和弦类别','基础');chordSelect('和弦类型','major')
+navigate('settings');choose('drop-d');navigate('chords')
 
 navigate('settings');soundCheckbox().props.onChange({target:{checked:false}});render();navigate('chords')
 assert.equal(chordButton('播放').props.disabled,true)

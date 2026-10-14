@@ -5,7 +5,7 @@ import { ChordPlayer } from '../chordAudio'
 import type { ChordPlaybackMode } from '../chordAudio'
 import { getPitch, MAX_FRET, NOTE_OPTIONS } from '../pitch'
 import type { SharedSettings } from '../useAppSettings'
-import { contains, generateFingerings, rankedFingerings, rootPosition, fingeringPitches } from '../fingerings'
+import { contains, generateFingerings, rankedFingerings, rootPosition, fingeringPitches, tuningProfile } from '../fingerings'
 import type { Position, Fingering } from '../fingerings'
 import { REFERENCE_SCALES, degreeAt, scaleSuggestions } from '../referenceScales'
 import { HoldGesture } from '../holdGesture'
@@ -81,7 +81,7 @@ export default function ChordsPage({ shared, active }: { shared: SharedSettings;
     pendingClick.current = { point: next, timer: setTimeout(() => { pendingClick.current = null; setRootAt(next) },350) }
   }
   function change(rootValue: string, typeValue: ChordTypeId) {
-    stop(); const nextChord = buildChord(rootValue,typeValue), nextAnchor = rootPosition(nextChord,tuning,anchor)
+    stop(); const nextChord = buildChord(rootValue,typeValue), nextAnchor = rootPosition(nextChord,tuning,rootValue === root ? anchor : null)
     const nextShape = rankedFingerings(generateFingerings(nextChord,tuning),nextAnchor,true)[0] ?? null
     setRoot(rootValue); setType(typeValue); setPoint(nextAnchor); setChosen(null)
     playShape(nextShape,'together',false,rootValue,typeValue)
@@ -107,11 +107,11 @@ export default function ChordsPage({ shared, active }: { shared: SharedSettings;
   const holding = heldKey === audioKey
   return <>
     <div className="intro chord-intro"><span className="eyebrow">认识和弦</span><details className="chord-help"><summary><h1>和弦探索</h1><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 7l6 6 6-6" /></svg><span className="sr-only">展开或收起说明</span></summary><div>
-      <p>未锁定时，点击大指板选择根音位置，生成包含该位置的附近指型并播放。双击当前根音或使用锁定按钮锁定／解锁；双击会取消等待中的单击试听。</p>
+      <p>未锁定时，点击大指板选择根音位置，寻找包含该位置的常用模板并播放；没有时提示“该位置暂无常用指型”。双击当前根音或使用锁定按钮锁定／解锁；双击会取消等待中的单击试听。</p>
       <p>锁定后点击任意位置只播放单音。参考音阶主音为当前根音，可以自由选择；建议仅表示包含和弦音，不是唯一对应调式。单音级数采用大写罗马数字及升降号（I、♭III），以后调内和弦才按性质使用 I、ii、iii 等。</p>
-      <p>最明显的填色标记是实际发声位置；细圈是其他和弦音，虚线圈是参考音阶内音，较弱标记是音阶外音。外音也能演奏。小图左侧为 6 弦、右侧为 1 弦，○ 空弦，× 不弹；有明确分析的横按才绘制横条。</p>
+      <p>最明显的填色标记是实际发声位置；细圈是其他和弦音，虚线圈是参考音阶内音，较弱标记是音阶外音。外音也能演奏。小图左侧为 6 弦、右侧为 1 弦，○ 空弦，× 不弹；圆点内 1—4 为食指到小拇指，不使用拇指；横条只采用模板记录的真实横按。</p>
       <p>单击“播放”发短音，按住超过 220ms 持续稳定音高，松开自然衰减；鼠标、触屏与 Enter／空格都可操作。移出、取消、失焦、静音或离开会停止。</p>
-      <p>筛选限定 0—24 品、每弦一个音、按弦跨度最多 4 品，空弦不计跨度。九／十一／十三及变化扩展可省略纯五度，十三还可省略十一度；根音、三度／挂留音、七度及变化／目标扩展音保留。卡片列出实际音和省略音。筛选不保证每个方案适合人手，不代表所有可能指型。</p>
+      <p>仅展示常用 CAGED 开放、E／A 横按和局部模板，及已收录的七和弦／扩展握法。每个按弦位置有四指分配，横按不能误压空弦；跨度只是辅助检查。扩展握法仅按各模板明确的规则省略五、九或十一音，卡片列出实际音和省略音。没有模板的调弦／类型不生成组合，锁定后仍可单音探索；模板不代表所有人体工学都适合。</p>
     </div></details></div>
     <section className="chord-card chord-layout" aria-label="和弦设置与组成"><div className="chord-control-panel">
       <div className="chord-controls"><label>根音<select aria-label="和弦根音" value={root} onChange={(event) => { setLocked(false); change(event.target.value,type) }}>{NOTE_OPTIONS.map((note) => <option key={note}>{note}</option>)}</select></label><label>类别<select aria-label="和弦类别" value={chord.type.category} onChange={(event) => change(root,CHORD_TYPES.find((item) => item.category === event.target.value)!.id)}>{CHORD_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></label><label>类型<select aria-label="和弦类型" value={type} onChange={(event) => change(root,event.target.value as ChordTypeId)}>{CHORD_TYPES.filter((item) => item.category === chord.type.category).map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}</select></label></div>
@@ -121,7 +121,7 @@ export default function ChordsPage({ shared, active }: { shared: SharedSettings;
       <div className="challenge-actions"><button type="button" className="sound-button" aria-pressed={holding} disabled={!soundEnabled || !current} onPointerDown={(event) => { if (event.button !== 0) return; event.preventDefault(); event.currentTarget.focus(); event.currentTarget.setPointerCapture(event.pointerId); beginHold() }} onPointerUp={() => gesture.end()} onPointerCancel={() => gesture.end(true)} onLostPointerCapture={() => gesture.end(true)} onPointerLeave={() => gesture.end(true)} onPointerMove={(event) => { const rect = event.currentTarget.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) gesture.end(true) }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') {event.preventDefault();if (!event.repeat) beginHold()} }} onKeyUp={(event) => {if (event.key === 'Enter' || event.key === ' ') {event.preventDefault();gesture.end()} }} onBlur={() => gesture.end(true)} onClick={(event) => {if (event.detail === 0) playShape(current,'together')}}>播放</button><button type="button" className="sound-button" disabled={!soundEnabled || !current} onClick={() => {stop();playShape(current,'sequence')}}>琶音 arpeggio</button><button type="button" className="plain-button" onClick={stop}>停止播放</button></div>
       {!soundEnabled && <div role="status"><p>全局声音已关闭。</p><button className="sound-button" onClick={() => shared.setSoundEnabled(true)}>启用声音</button></div>}
       {message?.key === audioKey && <p role="status">{message.text}</p>}
-      {current ? <div className="current-fingering" aria-live="polite"><p>当前指型（6 → 1 弦）：{[...current.frets].reverse().map((fret) => fret === null ? '×' : fret).join('、')} · 跨度 {current.span} 品</p><p>实际演奏：{fingeringPitches(current,tuning,chord).map((pitch) => pitch.label).join('、')}</p>{current.omitted.length > 0 && <p>省略音：{current.omitted.join('、')}</p>}</div> : <p role="status">此根音位置没有符合约束的指型，请换一个位置或选择其他候选。</p>}
+      {current ? <div className="current-fingering" aria-live="polite"><p>当前指型（6 → 1 弦）：{[...current.frets].reverse().map((fret) => fret === null ? '×' : fret).join('、')} · 跨度 {current.span} 品</p><p>实际演奏：{fingeringPitches(current,tuning,chord).map((pitch) => pitch.label).join('、')}</p>{current.omitted.length > 0 && <p>省略音：{current.omitted.join('、')}</p>}</div> : <p role="status">{!tuningProfile(tuning) ? '当前调弦暂无已验证常用指型；锁定根音后仍可单音探索。' : shapes.length ? '该位置暂无常用指型。' : '暂无已验证常用指型；仍可查看公式并锁定根音进行单音探索。'}</p>}
     </div><FingeringBrowser key={`${contextKey}:${anchor.string}:${anchor.fret}`} shapes={shapes} current={current} anchor={anchor} chord={chord} tuning={tuning} onChoose={chooseShape} /></section>
     <section className="workspace chord-workspace" aria-labelledby="chord-board-title"><div className="workspace-header"><h2 id="chord-board-title">和弦指板 · {chord.name}</h2></div>
       <div className="board-scroll" role="region" aria-label="和弦指板，可横向滚动" tabIndex={0}><div className="board"><div className="fret-heading"><span>弦 / 品</span>{FRETS.map((fret) => <span key={fret} className={fret === 0 ? 'open-heading' : ''}>{fret}<small>{fret === 0 ? '空弦' : '品'}</small></span>)}</div><div className="strings">{tuning.map((_,index) => <div className={`string-row string-${index+1}`} key={index}><div className="string-label"><strong>{index+1} 弦</strong><span>{showNotes ? getPitch(index+1,0,tuning).label : '—'}</span></div>{FRETS.map((fret) => {
