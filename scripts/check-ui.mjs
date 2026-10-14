@@ -1,21 +1,24 @@
-// 无需 DOM 或新增依赖：执行组件事件处理器并检查 React 元素树。
+// 执行组件事件并检查可见 React 元素树；浏览器布局另行验收。
 import assert from 'node:assert/strict'
-import fs from 'node:fs'
-import { createRequire } from 'node:module'
-import { pathToFileURL } from 'node:url'
-import ts from 'typescript'
+import { createModuleLoader, dataUrl } from './load-ts.mjs'
 
-const require = createRequire(import.meta.url)
 const initialTheme = process.argv[2] === 'dark' ? 'dark' : 'light'
 const savedTheme = new Map([['saguadlib-theme', initialTheme]])
+const listeners = new Map()
+let hash = '#/fretboard'
+const media = { matches: initialTheme === 'dark', addEventListener() {}, removeEventListener() {} }
 globalThis.window = {
   localStorage: { getItem: (key) => savedTheme.get(key), setItem: (key, value) => savedTheme.set(key, value) },
-  matchMedia: () => ({ matches: initialTheme === 'dark' }),
+  matchMedia: () => media,
+  addEventListener(type, callback) { if (!listeners.has(type)) listeners.set(type, new Set()); listeners.get(type).add(callback) },
+  removeEventListener(type, callback) { listeners.get(type)?.delete(callback) },
+  location: { get hash() { return hash }, set hash(value) { hash = value.startsWith('#') ? value : `#${value}`; listeners.get('hashchange')?.forEach((fn) => fn()) } },
 }
 globalThis.document = { documentElement: { dataset: {} } }
-const slots = []
-let cursor = 0
+const instances = new Map()
+let currentSlots, cursor = 0, effects = []
 const useState = (initial) => {
+  const slots = currentSlots
   const index = cursor++
   if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial
   return [slots[index], (next) => { slots[index] = typeof next === 'function' ? next(slots[index]) : next }]
@@ -23,28 +26,38 @@ const useState = (initial) => {
 globalThis.__guitarTestHooks = {
   useState,
   useRef(initial) { return useState(() => ({ current: initial }))[0] },
-  useEffect() {},
+  useEffect(callback, dependencies) {
+    const slots = currentSlots
+    const index = cursor++
+    const previous = slots[index]
+    if (!previous || dependencies.some((item, i) => !Object.is(item, previous.dependencies[i]))) {
+      slots[index] = { dependencies }
+      effects.push(() => { previous?.cleanup?.(); slots[index].cleanup = callback() })
+    }
+  },
 }
-const dataUrl = (source) => `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
-const compile = (path) => ts.transpileModule(fs.readFileSync(path, 'utf8'), {
-  compilerOptions: { module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.ReactJSX },
-}).outputText
-const pitchUrl = dataUrl(compile('src/pitch.ts'))
-const audioUrl = dataUrl(compile('src/audio.ts'))
-const themeUrl = dataUrl(compile('src/theme.ts'))
 const hookUrl = dataUrl('export const { useState, useRef, useEffect } = globalThis.__guitarTestHooks')
-let compiled = compile('src/App.tsx')
-compiled = compiled.replace(/from ["']react["']/g, `from '${hookUrl}'`)
-  .replace(/from ["']react\/jsx-runtime["']/g, `from '${pathToFileURL(require.resolve('react/jsx-runtime')).href}'`)
-  .replace(/from ["']\.\/pitch["']/g, `from '${pitchUrl}'`)
-  .replace(/from ["']\.\/audio["']/g, `from '${audioUrl}'`)
-  .replace(/from ["']\.\/theme["']/g, `from '${themeUrl}'`)
-  .replace(/import ["']\.\/App.css["'];?/, '')
-const { default: App } = await import(dataUrl(compiled))
+const moduleUrl = createModuleLoader({ react: hookUrl })
+const { default: App } = await import(moduleUrl('src/App.tsx'))
 let tree
-function render() { cursor = 0; tree = App() }
+function expand(node, path = 'root') {
+  if (!node || typeof node !== 'object') return node
+  if (Array.isArray(node)) return node.map((child, index) => expand(child, `${path}/${index}`))
+  if (typeof node.type === 'function') {
+    const id = `${path}:${node.type.name}:${node.key ?? ''}`
+    if (!instances.has(id)) instances.set(id, [])
+    currentSlots = instances.get(id); cursor = 0
+    return expand(node.type(node.props), id)
+  }
+  return { ...node, props: { ...node.props, children: expand(node.props?.children, `${path}/children`) } }
+}
+function render() {
+  effects = []
+  tree = expand({ type: App, props: {} })
+  effects.forEach((effect) => effect())
+}
 function nodes(node) {
-  if (!node || typeof node !== 'object') return []
+  if (!node || typeof node !== 'object' || node.props?.hidden) return []
   if (Array.isArray(node)) return node.flatMap((item) => nodes(item))
   return [node, ...nodes(node.props?.children)]
 }
@@ -59,6 +72,16 @@ const text = (node) => {
 const boardButtons = () => nodes(tree).filter((node) => node.type === 'button' && node.props.className?.startsWith('fret-cell'))
 const click = async (string, fret) => { await boardButtons()[(string - 1) * 25 + fret].props.onClick(); render() }
 const choose = (value) => { find((node) => node.type === 'select' && node.props.value !== undefined && node.props.onChange && node.props.children.length === 2).props.onChange({ target: { value } }); render() }
+function navigate(id) {
+  find((node) => node.type === 'select' && node.props['aria-label'] === '板块导航').props.onChange({ target: { value: id } })
+  render()
+}
+function chooseTheme(value) {
+  navigate('settings')
+  find((node) => node.type === 'select' && node.props['aria-label'] === '主题').props.onChange({ target: { value } })
+  render()
+  navigate('fretboard')
+}
 const toggleNotes = (checked) => { find((node) => node.type === 'input' && node.props.type === 'checkbox').props.onChange({ target: { checked } }); render() }
 const detail = () => byClass('selection')
 const reveal = () => { detail().props.onClick(); render() }
@@ -77,8 +100,9 @@ const assertHidden = () => {
 render()
 assert.match(text(byClass('brand')), /Saguadlib/)
 const themeSelect = () => find((node) => node.type === 'select' && node.props['aria-label'] === '主题')
+navigate('settings')
 assert.equal(themeSelect().props.value, initialTheme)
-themeSelect().props.onChange({ target: { value: initialTheme } }); render()
+chooseTheme(initialTheme)
 assert.equal(document.documentElement.dataset.theme, initialTheme)
 assert.equal(boardButtons().length, 150)
 assert.match(boardButtons()[24].props['aria-label'], /E6/)
@@ -100,9 +124,9 @@ assert.equal(text(byClass('guess-hint')), '先猜音名，再点击下方详情�
 // 用户指定的标准调弦验收流程，包含鼠标/触屏点击、Enter 和空格。
 await click(6, 3)
 assertHidden()
-themeSelect().props.onChange({ target: { value: initialTheme === 'dark' ? 'light' : 'dark' } }); render()
+chooseTheme(initialTheme === 'dark' ? 'light' : 'dark')
 assertHidden()
-themeSelect().props.onChange({ target: { value: initialTheme } }); render()
+chooseTheme(initialTheme)
 assertHidden()
 assert.match(text(detail()), /第 6 弦/)
 assert.match(text(detail()), /3 品/)
@@ -167,6 +191,43 @@ for (const [fret, octave] of [[0, 2], [12, 3], [24, 4]]) {
   await click(6, fret); assertHidden(); reveal()
   assert.equal(text(byClass('selection-note')), `当前音高F♯${octave}`)
 }
+// 七个地址、占位页与共享设置，以及返回指板后的局部练习状态。
+for (const id of ['chords', 'scales', 'jam', 'transcription', 'about']) {
+  navigate(id)
+  assert.match(text(byClass('placeholder-page')), /筹备中/)
+  assert.equal(boardButtons().length, 0)
+  assert.equal(nodes(tree).filter((node) => node.type === 'button').length, 0)
+  assert.match(text(byClass('shared-summary')), /自定义调弦/)
+}
+navigate('fretboard')
+assert.equal(text(byClass('selection-note')), '当前音高F♯4')
+navigate('settings')
+choose('drop-d')
+const soundCheckbox = () => find((node) => node.type === 'label' && text(node).startsWith('点击发声')).props.children[1]
+soundCheckbox().props.onChange({ target: { checked: false } }); render()
+navigate('fretboard'); assertHidden()
+assert.match(text(byClass('open-summary')), /D2/)
+assert.match(text(byClass('sound-button')), /声音关/)
+await click(6, 0); assertHidden(); reveal()
+assert.equal(text(byClass('selection-note')), '当前音高D2')
+// 刷新：全局偏好恢复，但练习中的选中位置不被持久化。
+for (const slots of instances.values()) for (const slot of slots) if (slot?.cleanup) slot.cleanup()
+instances.clear(); render()
+assert.equal(text(detail()), '请先点击指板选择位置')
+assert.match(text(byClass('open-summary')), /D2/)
+assert.match(text(byClass('sound-button')), /声音关/)
+assert.ok(boardButtons().every((button) => !/[A-G]/.test(button.props['aria-label'])))
+navigate('settings')
+find((node) => node.type === 'button' && text(node) === '恢复默认设置').props.onClick(); render()
+assert.equal(themeSelect().props.value, 'system')
+navigate('fretboard')
+assert.match(text(byClass('open-summary')), /E2/)
+assert.match(text(byClass('sound-button')), /声音开/)
+assert.match(boardButtons()[149].props['aria-label'], /E4/)
+window.location.hash = '#/unknown'; render()
+assert.equal(boardButtons().length, 150)
+assert.equal(nodes(tree).filter((node) => node.type === 'a' && node.props['aria-current'] === 'page').length, 1)
+console.log('通过：七板块导航、占位无假按钮、跨页共享调弦/主题/声音、返回保留位置、刷新偏好与恢复默认')
 console.log(`主题 ${initialTheme}：品牌及主题切换通过，功能检查如下`)
 console.log('通过：隐藏 → 6 弦 3 品不揭晓 → 点击详情 G2 → 5 弦 3 品重置 → 点击详情 C3')
 console.log('通过：未选位置不揭晓、鼠标/触屏点击处理器、Enter/空格、其他按键及控件不揭晓')

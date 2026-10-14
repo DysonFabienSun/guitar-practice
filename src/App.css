@@ -150,3 +150,27 @@ dd small { font-size: 10px; display: inline-block; color: var(--accent-text); ma
   .selection-note > div { font-size: 36px; }
   .site-footer { flex-wrap: wrap; }
 }
+
+.navigation { padding: 20px 0 12px; }
+.desktop-navigation { display: flex; flex-wrap: wrap; gap: 8px; }
+.desktop-navigation a { padding: 10px 16px; border: 1px solid transparent; border-radius: 8px; text-decoration: none; font-size: 14px; }
+.desktop-navigation a:hover { background: var(--hover-bg); }
+.desktop-navigation a[aria-current="page"] { color: var(--on-accent); background: var(--accent); font-weight: 700; border-bottom: 3px solid var(--on-accent); }
+.mobile-navigation { display: none; }
+.shared-summary { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 12px; line-height: 1.8; color: var(--muted); padding: 12px 0; border-bottom: 1px solid var(--border); }
+.app > main { min-height: 55vh; padding-top: 30px; padding-bottom: 32px; }
+.settings-card, .placeholder-page { padding: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; margin-top: 28px; }
+.placeholder-page { margin-top: 0; min-height: 240px; }
+.placeholder-page p, .settings-card p { font-size: 14px; line-height: 1.8; color: var(--muted); }
+.settings-card > button { margin-top: 18px; }
+.setting-row { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 16px 0; font-size: 15px; }
+.setting-row select, .mobile-navigation select { border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: var(--surface); min-height: 44px; padding: 8px 12px; font: inherit; }
+.setting-row input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--accent); cursor: pointer; }
+.settings-card .setting-help { margin: -4px 0 12px; font-size: 12px; }
+@media (max-width: 700px) {
+  .desktop-navigation { display: none; }
+  .mobile-navigation { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 14px; }
+  .mobile-navigation select { flex: 1; min-width: 0; max-width: 250px; }
+  .summary-notes { flex-basis: 100%; order: 1; }
+  .settings-card, .placeholder-page { padding: 20px 16px; }
+}
