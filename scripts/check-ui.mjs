@@ -6,6 +6,13 @@ import { pathToFileURL } from 'node:url'
 import ts from 'typescript'
 
 const require = createRequire(import.meta.url)
+const initialTheme = process.argv[2] === 'dark' ? 'dark' : 'light'
+const savedTheme = new Map([['saguadlib-theme', initialTheme]])
+globalThis.window = {
+  localStorage: { getItem: (key) => savedTheme.get(key), setItem: (key, value) => savedTheme.set(key, value) },
+  matchMedia: () => ({ matches: initialTheme === 'dark' }),
+}
+globalThis.document = { documentElement: { dataset: {} } }
 const slots = []
 let cursor = 0
 const useState = (initial) => {
@@ -24,12 +31,14 @@ const compile = (path) => ts.transpileModule(fs.readFileSync(path, 'utf8'), {
 }).outputText
 const pitchUrl = dataUrl(compile('src/pitch.ts'))
 const audioUrl = dataUrl(compile('src/audio.ts'))
+const themeUrl = dataUrl(compile('src/theme.ts'))
 const hookUrl = dataUrl('export const { useState, useRef, useEffect } = globalThis.__guitarTestHooks')
 let compiled = compile('src/App.tsx')
 compiled = compiled.replace(/from ["']react["']/g, `from '${hookUrl}'`)
   .replace(/from ["']react\/jsx-runtime["']/g, `from '${pathToFileURL(require.resolve('react/jsx-runtime')).href}'`)
   .replace(/from ["']\.\/pitch["']/g, `from '${pitchUrl}'`)
   .replace(/from ["']\.\/audio["']/g, `from '${audioUrl}'`)
+  .replace(/from ["']\.\/theme["']/g, `from '${themeUrl}'`)
   .replace(/import ["']\.\/App.css["'];?/, '')
 const { default: App } = await import(dataUrl(compiled))
 let tree
@@ -60,11 +69,17 @@ const keyReveal = (key) => {
   return prevented
 }
 const assertHidden = () => {
+  assert.match(text(detail()), /点击查看答案/)
   assert.ok(!/[A-G][♯♭]?/.test(text(detail())))
   assert.ok(!/[A-G][♯♭]?\d/.test(detail().props['aria-label']))
   assert.ok(!/音名|八度|频率|MIDI/.test(text(detail())))
 }
 render()
+assert.match(text(byClass('brand')), /Saguadlib/)
+const themeSelect = () => find((node) => node.type === 'select' && node.props['aria-label'] === '主题')
+assert.equal(themeSelect().props.value, initialTheme)
+themeSelect().props.onChange({ target: { value: initialTheme } }); render()
+assert.equal(document.documentElement.dataset.theme, initialTheme)
 assert.equal(boardButtons().length, 150)
 assert.match(boardButtons()[24].props['aria-label'], /E6/)
 assert.match(boardButtons()[149].props['aria-label'], /E4/)
@@ -84,6 +99,10 @@ assert.equal(text(byClass('guess-hint')), '先猜音名，再点击下方详情�
 
 // 用户指定的标准调弦验收流程，包含鼠标/触屏点击、Enter 和空格。
 await click(6, 3)
+assertHidden()
+themeSelect().props.onChange({ target: { value: initialTheme === 'dark' ? 'light' : 'dark' } }); render()
+assertHidden()
+themeSelect().props.onChange({ target: { value: initialTheme } }); render()
 assertHidden()
 assert.match(text(detail()), /第 6 弦/)
 assert.match(text(detail()), /3 品/)
@@ -148,7 +167,11 @@ for (const [fret, octave] of [[0, 2], [12, 3], [24, 4]]) {
   await click(6, fret); assertHidden(); reveal()
   assert.equal(text(byClass('selection-note')), `当前音高F♯${octave}`)
 }
+console.log(`主题 ${initialTheme}：品牌及主题切换通过，功能检查如下`)
 console.log('通过：隐藏 → 6 弦 3 品不揭晓 → 点击详情 G2 → 5 弦 3 品重置 → 点击详情 C3')
 console.log('通过：未选位置不揭晓、鼠标/触屏点击处理器、Enter/空格、其他按键及控件不揭晓')
 console.log('通过：显示模式直接显示、隐藏模式与调弦重置、无声猜音、150 个按钮、自定义验证与应用')
 delete globalThis.__guitarTestHooks
+
+delete globalThis.window
+delete globalThis.document
