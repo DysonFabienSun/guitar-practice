@@ -18,9 +18,9 @@ function App() {
   const [draft, setDraft] = useState(() => STANDARD_TUNING.map((open) => ({ noteName: open.noteName, octave: String(open.octave) })))
   const [tuningErrors, setTuningErrors] = useState<string[]>([])
   const [answerRevealed, setAnswerRevealed] = useState(false)
-  const [selected, setSelected] = useState({ stringNumber: 6, fret: 0 })
-  const pitch = getPitch(selected.stringNumber, selected.fret, tuning)
-  const answerVisible = showNotes || answerRevealed
+  const [selected, setSelected] = useState<{ stringNumber: number; fret: number } | null>(null)
+  const pitch = selected ? getPitch(selected.stringNumber, selected.fret, tuning) : null
+  const answerVisible = Boolean(selected && (showNotes || answerRevealed))
 
   useEffect(() => () => {
     ++playbackRequest.current
@@ -30,7 +30,7 @@ function App() {
 
   async function selectPosition(stringNumber: number, fret: number) {
     setSelected({ stringNumber, fret })
-    setAnswerRevealed(true)
+    setAnswerRevealed(false)
     if (!soundEnabled) return
     const request = ++playbackRequest.current
     try {
@@ -41,6 +41,17 @@ function App() {
       if (request === playbackRequest.current) {
         setAudioError('暂时无法播放声音，请检查浏览器声音权限后重试；仍可查看音名。')
       }
+    }
+  }
+
+  function revealAnswer() {
+    if (!showNotes && selected) setAnswerRevealed(true)
+  }
+
+  function handleRevealKey(event: React.KeyboardEvent<HTMLElement>) {
+    if (!showNotes && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault()
+      revealAnswer()
     }
   }
 
@@ -143,7 +154,7 @@ function App() {
                       <div className="string-label"><strong>{stringNumber} 弦</strong><span>{showNotes ? getPitch(stringNumber, 0, tuning).label : '—'}</span></div>
                       {FRETS.map((fret) => {
                         const note = getPitch(stringNumber, fret, tuning)
-                        const active = selected.stringNumber === stringNumber && selected.fret === fret
+                        const active = selected?.stringNumber === stringNumber && selected.fret === fret
                         return <button key={fret} type="button" className={`fret-cell ${fret === 0 ? 'open-cell' : ''} ${active ? 'selected' : ''}`} aria-label={`第 ${stringNumber} 弦 ${fret} 品${showNotes ? `，${note.label}` : ''}`} aria-pressed={active} onClick={() => void selectPosition(stringNumber, fret)}><span className={`note ${showNotes || active ? '' : 'hidden-note'}`}>{showNotes ? note.noteName : active ? '●' : ''}</span></button>
                       })}
                     </div>
@@ -156,12 +167,27 @@ function App() {
           <div className="board-footer"><span><i /> 当前选中位置</span><span>0 品 = 空弦 <b>·</b> 每升一品，升高一个半音</span><span className="scroll-hint">左右滑动查看全部品位 ↔</span></div>
         </section>
 
-        <section className="selection" aria-label="选中位置详情" aria-live="polite" aria-atomic="true">
-          <div className="selection-note"><span className="eyebrow">当前音高</span><div>{answerVisible ? <>{pitch.noteName}<span>{pitch.octave}</span></> : '?'}</div></div>
-          <dl><div><dt>弦号</dt><dd>第 {selected.stringNumber} 弦</dd></div><div><dt>品位</dt><dd>{selected.fret} 品 {selected.fret === 0 && <small>空弦</small>}</dd></div><div><dt>音名</dt><dd>{answerVisible ? pitch.noteName : '—'}</dd></div><div><dt>八度</dt><dd>{answerVisible ? pitch.octave : '—'}</dd></div></dl>
+        <section
+          className="selection"
+          aria-label={selected && answerVisible && pitch
+            ? `第 ${selected.stringNumber} 弦 ${selected.fret} 品，${pitch.label}`
+            : selected ? `第 ${selected.stringNumber} 弦 ${selected.fret} 品，点击查看答案` : '请先点击指板选择位置'}
+          aria-live="polite"
+          aria-atomic="true"
+          role={!showNotes ? 'button' : undefined}
+          tabIndex={!showNotes && selected ? 0 : undefined}
+          aria-disabled={!showNotes && !selected ? true : undefined}
+          onClick={revealAnswer}
+          onKeyDown={handleRevealKey}
+        >
+          {selected ? <>
+            <div className="selection-note"><span className="eyebrow">当前音高</span><div>{answerVisible && pitch ? <>{pitch.noteName}<span>{pitch.octave}</span></> : '?'}</div></div>
+            <dl><div><dt>弦号</dt><dd>第 {selected.stringNumber} 弦</dd></div><div><dt>品位</dt><dd>{selected.fret} 品 {selected.fret === 0 && <small>空弦</small>}</dd></div>{answerVisible && pitch && <><div><dt>音名</dt><dd>{pitch.noteName}</dd></div><div><dt>八度</dt><dd>{pitch.octave}</dd></div></>}</dl>
+            {!answerVisible && <p className="reveal-prompt">点击查看答案</p>}
+          </> : <p className="empty-selection">请先点击指板选择位置</p>}
         </section>
 
-        {!showNotes && <p className="guess-hint">先猜音名，再点击位置核对。</p>}
+        {!showNotes && <p className="guess-hint">先猜音名，再点击下方详情窗口核对。</p>}
 
         <aside className="tip"><span aria-hidden="true">✦</span><p><strong>试着找找看</strong> 同一根弦的 12 品比空弦高一个八度，音名相同。</p></aside>
       </main>

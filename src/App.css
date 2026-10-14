@@ -120,3 +120,10 @@ dd small { font-size: 10px; display: inline-block; color: #698367; margin-left: 
   .custom-strings fieldset { flex-direction: column; }
   .workspace-header { flex-wrap: wrap; }
 }
+
+.selection { flex-wrap: wrap; }
+.selection[role="button"] { cursor: pointer; }
+.selection[aria-disabled="true"] { cursor: default; }
+.selection[role="button"]:focus-visible { outline: 3px solid #31806b; outline-offset: 3px; }
+.reveal-prompt { flex-basis: 100%; margin: 0; color: #326e54; font-size: 14px; text-align: center; }
+.empty-selection { margin: 0; color: #637d65; font-size: 14px; line-height: 1.8; }
